@@ -66,9 +66,12 @@ reply_continue(kvm_instance_t *kvm, struct kvmi_dom_event *ev)
         struct kvmi_event_reply common;
     } rpl = {0};
 
+    // TODO:
+#if 0
     rpl.hdr.vcpu = ev->event.common.vcpu;
     rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
     rpl.common.event = ev->event.common.event;
+#endif
 
     if (kvm->libkvmi.kvmi_reply_event(dom, ev->seq, &rpl, sizeof(rpl)))
         return VMI_FAILURE;
@@ -78,6 +81,7 @@ reply_continue(kvm_instance_t *kvm, struct kvmi_dom_event *ev)
 
 static void kvm_segment_flags(const struct kvm_segment *s, x86_segment_flags_t *flags)
 {
+#if 0
     flags->type = s->type;
     flags->s = s->s;
     flags->dpl = s->dpl;
@@ -86,6 +90,7 @@ static void kvm_segment_flags(const struct kvm_segment *s, x86_segment_flags_t *
     flags->l = s->l;
     flags->db = s->db;
     flags->g = s->g;
+#endif
 }
 
 void
@@ -94,6 +99,7 @@ kvmi_regs_to_libvmi(
     struct kvm_sregs *kvmi_sregs,
     x86_registers_t *libvmi_regs)
 {
+#if 0
     x86_registers_t x86_regs = {0};
     //      standard regs
     x86_regs.rax = kvmi_regs->rax;
@@ -162,6 +168,7 @@ kvmi_regs_to_libvmi(
     kvm_segment_flags(&kvmi_sregs->ldt, &x86_regs.ldt_flags);
     // assign
     (*libvmi_regs) = x86_regs;
+#endif
 }
 
 void *
@@ -413,6 +420,7 @@ init_kvmi(
 
     // query and display supported features
     struct kvmi_features features = {0};
+#if 0
     kvm->libkvmi.kvmi_spp_support(kvm->kvmi_dom, (bool*)&features.spp);
     kvm->libkvmi.kvmi_vmfunc_support(kvm->kvmi_dom, (bool*)&features.vmfunc);
     kvm->libkvmi.kvmi_eptp_support(kvm->kvmi_dom, (bool*)&features.eptp);
@@ -425,6 +433,7 @@ init_kvmi(
     dbprint(VMI_DEBUG_KVM, "--    VE: %s\n", features.ve ? "Yes" : "No");
     // available in 2019 on Intel Ice Lake
     dbprint(VMI_DEBUG_KVM, "--    SPP: %s\n", features.spp ? "Yes" : "No");
+#endif
 
     return true;
 }
@@ -636,6 +645,7 @@ status_t kvm_request_page_fault (
     uint64_t virtual_address,
     uint32_t error_code)
 {
+#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi) {
         errprint("Invalid vmi handle\n");
@@ -654,6 +664,8 @@ status_t kvm_request_page_fault (
 
     dbprint(VMI_DEBUG_KVM, "--Page fault injected at 0x%"PRIx64"\n", virtual_address);
     return VMI_SUCCESS;
+#endif
+    return VMI_FAILURE;
 }
 
 status_t kvm_get_tsc_info(
@@ -713,6 +725,28 @@ kvm_get_vcpureg(
     if (VMI_FAILURE == kvm_get_vcpuregs(vmi, &regs, (unsigned short)vcpu))
         return VMI_FAILURE;
 
+#if defined(ARM32) || defined(ARM64)
+    switch (reg) {
+        case TTBR0:
+            *value = regs.arm.ttbr0;
+	    break;
+        case TTBR1:
+            *value = regs.arm.ttbr1;
+	    break;
+        case TTBCR:
+            *value = regs.arm.ttbcr;
+            break;
+	case CPSR:
+	    *value = regs.arm.cpsr;
+	    break;
+	case PC:
+	    *value = regs.arm.pc;
+	    break;
+        default:
+            dbprint(VMI_DEBUG_KVM, "--Reading register %"PRIu64" not implemented\n", reg);
+            return VMI_FAILURE;
+    }
+#else
     switch (reg) {
         case RAX:
             *value = regs.x86.rax;
@@ -823,6 +857,7 @@ kvm_get_vcpureg(
             dbprint(VMI_DEBUG_KVM, "--Reading register %"PRIu64" not implemented\n", reg);
             return VMI_FAILURE;
     }
+#endif
 
     return VMI_SUCCESS;
 }
@@ -833,6 +868,24 @@ kvm_get_vcpuregs(
     registers_t *registers,
     unsigned long vcpu)
 {
+#if defined(ARM32) || defined(ARM64)
+    struct kvm_regs regs = {0};
+    struct kvm_sregs sregs = {0};
+    arm_registers_t *arm = &registers->arm;
+    kvm_instance_t *kvm = kvm_get_instance(vmi);
+
+    if (!kvm->kvmi_dom)
+        return VMI_FAILURE;
+
+    if (kvm->libkvmi.kvmi_get_registers(kvm->kvmi_dom, vcpu, &regs, &sregs, NULL, NULL))
+        return VMI_FAILURE;
+
+    arm->ttbr0 = sregs.sys_regs[7];
+    arm->ttbr1 = sregs.sys_regs[8];
+    arm->ttbcr = sregs.sys_regs[9];
+    arm->pc = regs.regs.pc;
+    arm->cpsr = regs.regs.pstate;
+#else
     struct kvm_regs regs = {0};
     struct kvm_sregs sregs = {0};
     struct {
@@ -870,6 +923,7 @@ kvm_get_vcpuregs(
     x86->gdtr_limit = sregs.gdt.limit;
     x86->idtr_base = sregs.idt.base;
     x86->idtr_limit = sregs.idt.limit;
+#endif
 
     return VMI_SUCCESS;
 }
@@ -880,6 +934,7 @@ kvm_set_vcpureg(vmi_instance_t vmi,
                 reg_t reg,
                 unsigned long vcpu)
 {
+#if 0
     kvm_instance_t *kvm = kvm_get_instance(vmi);
     if (!kvm->kvmi_dom)
         return VMI_FAILURE;
@@ -961,6 +1016,9 @@ kvm_set_vcpureg(vmi_instance_t vmi,
     }
 
     return VMI_SUCCESS;
+
+#endif
+    return VMI_FAILURE;
 }
 
 status_t
@@ -968,6 +1026,7 @@ kvm_set_vcpuregs(vmi_instance_t vmi,
                  registers_t *registers,
                  unsigned long vcpu)
 {
+#if 0
     kvm_instance_t *kvm = kvm_get_instance(vmi);
     if (!kvm->kvmi_dom)
         return VMI_FAILURE;
@@ -996,6 +1055,8 @@ kvm_set_vcpuregs(vmi_instance_t vmi,
         return VMI_FAILURE;
     }
     return VMI_SUCCESS;
+#endif
+    return VMI_FAILURE;
 }
 
 status_t
@@ -1027,6 +1088,7 @@ status_t
 kvm_resume_vm(
     vmi_instance_t vmi)
 {
+#if 0
     kvm_instance_t *kvm = kvm_get_instance(vmi);
 
     // already resumed?
@@ -1068,4 +1130,6 @@ kvm_resume_vm(
     kvm->pause_count = 0;
 
     return VMI_SUCCESS;
+#endif
+    return VMI_FAILURE;
 }

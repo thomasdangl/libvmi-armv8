@@ -108,6 +108,7 @@ process_cb_response_emulate(
     vmi_event_t *libvmi_event,
     struct kvm_event_pf_reply_packet* rpl)
 {
+#if 0
     kvm_instance_t *kvm = kvm_get_instance(vmi);
 #ifdef ENABLE_SAFETY_CHECKS
     if (!kvm || !kvm->kvmi_dom) {
@@ -153,6 +154,8 @@ process_cb_response_emulate(
     }
 
     return status;
+#endif
+    return VMI_FAILURE;
 }
 
 static status_t
@@ -164,6 +167,7 @@ process_cb_response(
     void *rpl,
     size_t rpl_size)
 {
+#if 0
     kvm_instance_t *kvm = kvm_get_instance(vmi);
 #ifdef ENABLE_SAFETY_CHECKS
     if (!kvm || !kvm->kvmi_dom) {
@@ -224,6 +228,8 @@ process_cb_response(
         return VMI_FAILURE;
 
     return VMI_SUCCESS;
+#endif
+    return VMI_FAILURE;
 }
 
 static event_response_t
@@ -245,6 +251,7 @@ call_event_callback(
 static status_t
 process_register(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
+#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event) {
         errprint("%s: Invalid vmi or kvmi event handles\n", __func__);
@@ -311,11 +318,14 @@ process_register(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     rpl.cr.new_val = libvmi_event->reg_event.value;
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
+#endif
+    return VMI_FAILURE;
 }
 
 static status_t
 process_msr(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
+#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event) {
         errprint("%s: Invalid vmi or kvmi event handles\n", __func__);
@@ -383,11 +393,14 @@ process_msr(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     rpl.msr.new_val = libvmi_event->reg_event.value;
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
+#endif
+    return VMI_FAILURE;
 }
 
 static status_t
 process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
+#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event)
         return VMI_FAILURE;
@@ -439,11 +452,14 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
         rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
+#endif
+    return VMI_FAILURE;
 }
 
 static status_t
 process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
+#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event)
         return VMI_FAILURE;
@@ -546,11 +562,14 @@ process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     errprint("%s: Caught a memory event that had no handler registered in LibVMI @ GFN 0x%" PRIx64 " (0x%" PRIx64 "), access: %u\n",
              __func__, gfn, (addr_t)kvmi_event->event.page_fault.gpa, out_access);
     return VMI_FAILURE;
+#endif
+    return VMI_FAILURE;
 }
 
 static status_t
 process_descriptor(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
+#if 0
     vmi_event_t *libvmi_event = vmi->descriptor_access_event;
 
 #ifdef ENABLE_SAFETY_CHECKS
@@ -604,11 +623,14 @@ process_descriptor(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
+#endif
+    return VMI_FAILURE;
 }
 
 static status_t
 process_pause_event(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
+#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event)
         return VMI_FAILURE;
@@ -618,6 +640,7 @@ process_pause_event(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     // the pause event should have been poped by kvm_resume_vm
     // report to the user
     errprint("Unexpected PAUSE event while listening. Did you forget to resume the VM ?\n");
+#endif
 
     // always fail, so kvm_events_listen can fail too
     return VMI_FAILURE;
@@ -626,6 +649,7 @@ process_pause_event(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 status_t
 process_singlestep(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
+#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event)
         return VMI_FAILURE;
@@ -674,11 +698,14 @@ process_singlestep(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
+#endif
+    return VMI_FAILURE;
 }
 
 static status_t
 process_cpuid(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
+#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event) {
         errprint("%s: Invalid vmi or kvmi event handles\n", __func__);
@@ -722,6 +749,8 @@ process_cpuid(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
+#endif
+    return VMI_FAILURE;
 }
 
 
@@ -775,6 +804,7 @@ kvm_events_init(
     //  MSR:        kvmi_control_msr()
     //  PF:         kvmi_set_page_access
     //  singlestep: kvmi_control_singlestep()
+#if 0
     for (unsigned int vcpu = 0; vcpu < vmi->num_vcpus; vcpu++) {
         if (kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_CR, true)) {
             errprint("--Failed to enable CR interception\n");
@@ -804,7 +834,10 @@ err_exit:
         kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_PF, false);
         kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_SINGLESTEP, false);
     }
+
     return VMI_FAILURE;
+#endif
+    return VMI_SUCCESS;
 }
 
 void
@@ -824,6 +857,7 @@ kvm_events_destroy(
     if (VMI_FAILURE == kvm_pause_vm(vmi))
         errprint("--Failed to pause VM while destroying events\n");
 
+#if 0
     reg_event_t regevent = { .in_access = VMI_REGACCESS_N };
     if (kvm->monitor_cr0_on) {
         // disable CR0
@@ -874,6 +908,7 @@ kvm_events_destroy(
         if (kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_SINGLESTEP, false))
             errprint("--Failed to disable singlestep monitoring\n");
     }
+#endif
 
     // clean event queue
     if (kvm_are_events_pending(vmi)) {
@@ -992,6 +1027,7 @@ kvm_events_listen(
 
     GSList *loop;
 
+#if 0
     if (kvm_process_events_with_timeout(vmi, timeout) == VMI_FAILURE) {
         return VMI_FAILURE;
     }
@@ -1029,6 +1065,7 @@ kvm_events_listen(
             return VMI_FAILURE;
         }
     }
+#endif
 
     return VMI_SUCCESS;
 }

@@ -563,6 +563,8 @@ status_t linux_init(vmi_instance_t vmi, GHashTable *config)
     if ( !vmi->kpgd ) {
 #if defined(ARM32) || defined(ARM64)
         rc = driver_get_vcpureg(vmi, &vmi->kpgd, TTBR1, 0);
+        dbprint(VMI_DEBUG_MISC, "**got TTBR1 (0x%.16"PRIx64").\n", vmi->kpgd);
+	vmi->kpgd &= VMI_BIT_MASK(12,47);
 #elif defined(I386) || defined(X86_64)
         rc = driver_get_vcpureg(vmi, &vmi->kpgd, CR3, 0);
         vmi->kpgd &= ~0x1fffull; // mask PCID and meltdown bits
@@ -579,12 +581,17 @@ status_t linux_init(vmi_instance_t vmi, GHashTable *config)
 
     if ( !linux_instance->kaslr_offset ) {
         if ( VMI_FAILURE == init_kaslr(vmi) ) {
+#if defined(ARM32) || defined(ARM64)
+            dbprint(VMI_DEBUG_MISC, "**failed to determine KASLR offset\n");
+            goto _exit;
+#elif defined(I386) || defined(X86_64)
             // try without masking Meltdown bit
             vmi->kpgd |= 0x1000ull;
             if ( VMI_FAILURE == init_kaslr(vmi) ) {
                 dbprint(VMI_DEBUG_MISC, "**failed to determine KASLR offset\n");
                 goto _exit;
             }
+#endif
         }
     }
 

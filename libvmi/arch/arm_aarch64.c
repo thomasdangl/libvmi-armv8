@@ -44,6 +44,8 @@ void get_zero_level_4kb_descriptor(vmi_instance_t vmi, uint64_t dtb, uint64_t va
     if (VMI_SUCCESS == vmi_read_64_pa(vmi, info->arm_aarch64.zld_location, &zld_v)) {
         info->arm_aarch64.zld_value = zld_v;
     }
+    else
+        dbprint(VMI_DEBUG_PTLOOKUP, "--ARM PTLookup: Failed to read zld4 0x%"PRIx64"\n", info->arm_aarch64.zld_location);
 }
 
 // 1st Level Page Table Index (4kb Pages)
@@ -62,6 +64,8 @@ void get_first_level_4kb_descriptor(vmi_instance_t vmi, uint64_t dtb, uint64_t v
     if (VMI_SUCCESS == vmi_read_64_pa(vmi, info->arm_aarch64.fld_location, &fld_v)) {
         info->arm_aarch64.fld_value = fld_v;
     }
+    else
+        dbprint(VMI_DEBUG_PTLOOKUP, "--ARM PTLookup: Failed to read fld4 0x%"PRIx64"\n", info->arm_aarch64.fld_location);
 }
 
 // 1st Level Page Table Index (64kb Pages)
@@ -80,13 +84,15 @@ void get_first_level_64kb_descriptor(vmi_instance_t vmi, uint64_t dtb, uint64_t 
     if (VMI_SUCCESS == vmi_read_64_pa(vmi, info->arm_aarch64.fld_location, &fld_v)) {
         info->arm_aarch64.fld_value = fld_v;
     }
+    else
+        dbprint(VMI_DEBUG_PTLOOKUP, "--ARM PTLookup: Failed to read fld64 0x%"PRIx64"\n", info->arm_aarch64.fld_location);
 }
 
 // 2nd Level Page Table Index (4kb Pages)
 static inline
 uint64_t second_level_4kb_table_index(uint64_t vaddr)
 {
-    return (vaddr>>21) & VMI_BIT_MASK(0,8);
+    return (vaddr >> 21) & VMI_BIT_MASK(0,8);
 }
 
 // 2nd Level Page Table Descriptor (4kb Pages)
@@ -98,13 +104,15 @@ void get_second_level_4kb_descriptor(vmi_instance_t vmi, uint64_t dtb, uint64_t 
     if (VMI_SUCCESS == vmi_read_64_pa(vmi, info->arm_aarch64.sld_location, &sld_v)) {
         info->arm_aarch64.sld_value = sld_v;
     }
+    else
+        dbprint(VMI_DEBUG_PTLOOKUP, "--ARM PTLookup: Failed to read sld4 0x%"PRIx64"\n", info->arm_aarch64.sld_location);
 }
 
 // 2nd Level Page Table Index (64kb Pages)
 static inline
 uint64_t second_level_64kb_table_index(uint64_t vaddr)
 {
-    return (vaddr>>29) & VMI_BIT_MASK(0,12);
+    return (vaddr >> 29) & VMI_BIT_MASK(0,12);
 }
 
 // 2nd Level Page Table Descriptor (64kb Pages)
@@ -116,13 +124,15 @@ void get_second_level_64kb_descriptor(vmi_instance_t vmi, uint64_t dtb, uint64_t
     if (VMI_SUCCESS == vmi_read_64_pa(vmi, info->arm_aarch64.sld_location, &sld_v)) {
         info->arm_aarch64.sld_value = sld_v;
     }
+    else
+        dbprint(VMI_DEBUG_PTLOOKUP, "--ARM PTLookup: Failed to read sld64 0x%"PRIx64"\n", info->arm_aarch64.sld_location);
 }
 
 // 3rd Level Page Table Index (4kb Pages)
 static inline
 uint64_t third_level_4kb_table_index(uint64_t vaddr)
 {
-    return (vaddr>>12) & VMI_BIT_MASK(0,8);
+    return (vaddr >> 12) & VMI_BIT_MASK(0,8);
 }
 
 // 3rd Level Page Table Descriptor (4kb Pages)
@@ -134,13 +144,15 @@ void get_third_level_4kb_descriptor(vmi_instance_t vmi, uint64_t vaddr, page_inf
     if (VMI_SUCCESS == vmi_read_64_pa(vmi, info->arm_aarch64.tld_location, &tld_v)) {
         info->arm_aarch64.tld_value = tld_v;
     }
+    else
+        dbprint(VMI_DEBUG_PTLOOKUP, "--ARM PTLookup: Failed to read tld4 0x%"PRIx64"\n", info->arm_aarch64.tld_location);
 }
 
 // 3rd Level Page Table Index (64kb Pages)
 static inline
 uint64_t third_level_64kb_table_index(uint64_t vaddr)
 {
-    return (vaddr>>16) & VMI_BIT_MASK(0,12);
+    return (vaddr >> 16) & VMI_BIT_MASK(0,12);
 }
 
 // 3rd Level Page Table Descriptor (64kb Pages)
@@ -152,6 +164,8 @@ void get_third_level_64kb_descriptor(vmi_instance_t vmi, uint64_t vaddr, page_in
     if (VMI_SUCCESS == vmi_read_64_pa(vmi, info->arm_aarch64.tld_location, &tld_v)) {
         info->arm_aarch64.tld_value = tld_v;
     }
+    else
+        dbprint(VMI_DEBUG_PTLOOKUP, "--ARM PTLookup: Failed to read tld64 0x%"PRIx64"\n", info->arm_aarch64.tld_location);
 }
 
 // Based on ARM Reference Manual
@@ -168,24 +182,12 @@ status_t v2p_aarch64 (vmi_instance_t vmi,
 
     dbprint(VMI_DEBUG_PTLOOKUP, "--ARM AArch64 PTLookup: vaddr = 0x%.16"PRIx64", pt = 0x%.16"PRIx64"\n", vaddr, pt);
 
-    /*
-     * TODO: Fixme
-     * We need to know if we are using TTBR0 or TTBR1 here so we know table type.
-     * Right now we can deduce this for Linux by comparing to vmi->kpgd which is
-     * TTBR1. However, this means V2P translation only works with complete init.
-     * To make this OS neutral we will likely have to extend the API so the user
-     * can specify the pt type.
-     */
-
-    bool is_pt_ttbr1 = false;
     page_size_t ps;
     uint8_t levels;
     uint8_t va_width;
 
-    if (pt == vmi->kpgd)
-        is_pt_ttbr1 = true;
-
-    if ( is_pt_ttbr1 ) {
+    // TODO: actually look at t1sz and t0sz.
+    if ((vaddr & VMI_BIT_MASK(47,63)) == VMI_BIT_MASK(47,63)) {
         ps = vmi->arm64.tg1;
         va_width = 64 - vmi->arm64.t1sz;
     } else {
@@ -315,8 +317,114 @@ done:
     return status;
 }
 
-GSList* get_va_pages_aarch64(vmi_instance_t UNUSED(vmi), addr_t UNUSED(dtb))
+GSList* get_pages_aarch64(vmi_instance_t vmi, addr_t UNUSED(npt), page_mode_t UNUSED(npm), addr_t dtb)
 {
-    //TODO: investigate best method to loop over all tables
-    return NULL;
+    GSList *ret = NULL;
+    uint64_t *l0_page = g_malloc(VMI_PS_4KB);
+    uint64_t *l1_page = g_try_malloc0(VMI_PS_4KB);
+    uint64_t *l2_page = g_try_malloc0(VMI_PS_4KB);
+    uint64_t *l3_page = g_try_malloc0(VMI_PS_4KB);
+
+    if (!l0_page || !l1_page || !l2_page || !l3_page)
+        goto done;
+
+    page_size_t ps;
+    uint8_t va_width;
+    addr_t l0_location = dtb & VMI_BIT_MASK(12,47);
+
+    if (l0_location == (vmi->kpgd & VMI_BIT_MASK(12,47))) {
+        ps = vmi->arm64.tg1;
+        va_width = 64 - vmi->arm64.t1sz;
+    } else {
+        ps = vmi->arm64.tg0;
+        va_width = 64 - vmi->arm64.t0sz;
+    }
+
+    if ( VMI_PS_4KB != ps && va_width != 39 )
+    {
+        errprint("Only 4 level 4KB ARM64 tables are implemented for now\n");
+        goto done;
+    }
+
+    ACCESS_CONTEXT(ctx);
+
+    ctx.addr = l0_location;
+    if (VMI_FAILURE == vmi_read(vmi, &ctx, VMI_PS_4KB, l0_page, NULL))
+        goto done;
+
+    for (uint64_t l0_index = 0; l0_index < 0x200; l0_index++, l0_location += sizeof(uint64_t))
+    {
+        uint64_t l0_value = l0_page[l0_index];
+        uint64_t l1_location = l0_value & VMI_BIT_MASK(12,47);
+
+        if (!l1_location)
+               continue;
+
+        ctx.addr = l1_location;
+        if (VMI_FAILURE == vmi_read(vmi, &ctx, VMI_PS_4KB, l1_page, NULL))
+            continue;
+
+        for (uint64_t l1_index = 0; l1_index < 0x200; l1_index++, l1_location += sizeof(uint64_t))
+        {
+            uint64_t l1_value = l1_page[l1_index];
+            uint64_t l2_location = l1_value & VMI_BIT_MASK(12,47);
+
+            if (!l2_location)
+                continue;
+
+            ctx.addr = l2_location;
+            if (VMI_FAILURE == vmi_read(vmi, &ctx, VMI_PS_4KB, l2_page, NULL))
+                continue;
+
+            for (uint64_t l2_index = 0; l2_index < 0x200; l2_index++, l2_location += sizeof(uint64_t))
+            {
+                uint64_t l2_value = l2_page[l2_index];
+                uint64_t l3_location = l2_value & VMI_BIT_MASK(12,47);
+
+                if (!l3_location)
+                    continue;
+
+                ctx.addr = l3_location;
+                if (VMI_FAILURE == vmi_read(vmi, &ctx, VMI_PS_4KB, l3_page, NULL))
+                    continue;
+
+                for (uint64_t l3_index = 0; l3_index < 0x200; l3_index++)
+                {
+                    uint64_t l3_value = l3_page[l3_index];
+
+                    if (!l3_value)
+                        continue;
+
+                    page_info_t *info = g_try_malloc0(sizeof(page_info_t));
+
+                    if (!info)
+                        goto done;
+
+                    info->pt = dtb;
+                    info->vaddr = canonical_addr((l0_index << 39) | (l1_index << 30)
+                        | (l2_index << 21) | (l3_index << 12));
+                    info->paddr = l3_value | (info->vaddr & VMI_BIT_MASK(0,11));
+                    info->size = VMI_PS_4KB;
+                    info->arm_aarch64.zld_location = l0_location;
+                    info->arm_aarch64.zld_value = l0_value;
+                    info->arm_aarch64.fld_location = l1_location;
+                    info->arm_aarch64.fld_value = l1_value;
+                    info->arm_aarch64.sld_location = l2_location;
+                    info->arm_aarch64.sld_value = l2_value;
+                    info->arm_aarch64.tld_location = l3_location;
+                    info->arm_aarch64.tld_value = l3_value;
+                    ret = g_slist_prepend(ret, info);
+                }
+            }
+        }
+
+    }
+
+done:
+    g_free(l0_page);
+    g_free(l1_page);
+    g_free(l2_page);
+    g_free(l3_page);
+
+    return ret;
 }

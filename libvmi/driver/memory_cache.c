@@ -146,6 +146,10 @@ static memory_cache_entry_t create_new_entry (vmi_instance_t vmi, addr_t paddr,
     entry->last_used = entry->last_updated;
     entry->data = get_memory_data(vmi, paddr, length);
 
+    if (!entry->data)
+	    dbprint(VMI_DEBUG_MEMCACHE, "--failed read on requested PA [0x%"PRIx64"-0x%"PRIx64"]\n",
+		    paddr, paddr + length);
+
     return entry;
 
 err_exit:
