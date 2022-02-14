@@ -66,12 +66,9 @@ reply_continue(kvm_instance_t *kvm, struct kvmi_dom_event *ev)
         struct kvmi_event_reply common;
     } rpl = {0};
 
-    // TODO:
-#if 0
-    rpl.hdr.vcpu = ev->event.common.vcpu;
+    rpl.hdr.vcpu = ev->event.common.ev.vcpu;
     rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
-    rpl.common.event = ev->event.common.event;
-#endif
+    rpl.common.event = ev->event.common.hdr.event;
 
     if (kvm->libkvmi.kvmi_reply_event(dom, ev->seq, &rpl, sizeof(rpl)))
         return VMI_FAILURE;
@@ -79,9 +76,9 @@ reply_continue(kvm_instance_t *kvm, struct kvmi_dom_event *ev)
     return VMI_SUCCESS;
 }
 
+#if !defined(ARM32) && !defined(ARM64)
 static void kvm_segment_flags(const struct kvm_segment *s, x86_segment_flags_t *flags)
 {
-#if 0
     flags->type = s->type;
     flags->s = s->s;
     flags->dpl = s->dpl;
@@ -90,7 +87,6 @@ static void kvm_segment_flags(const struct kvm_segment *s, x86_segment_flags_t *
     flags->l = s->l;
     flags->db = s->db;
     flags->g = s->g;
-#endif
 }
 
 void
@@ -99,7 +95,6 @@ kvmi_regs_to_libvmi(
     struct kvm_sregs *kvmi_sregs,
     x86_registers_t *libvmi_regs)
 {
-#if 0
     x86_registers_t x86_regs = {0};
     //      standard regs
     x86_regs.rax = kvmi_regs->rax;
@@ -168,8 +163,8 @@ kvmi_regs_to_libvmi(
     kvm_segment_flags(&kvmi_sregs->ldt, &x86_regs.ldt_flags);
     // assign
     (*libvmi_regs) = x86_regs;
-#endif
 }
+#endif
 
 void *
 kvm_get_memory_patch(
@@ -1088,7 +1083,6 @@ status_t
 kvm_resume_vm(
     vmi_instance_t vmi)
 {
-#if 0
     kvm_instance_t *kvm = kvm_get_instance(vmi);
 
     // already resumed?
@@ -1130,6 +1124,4 @@ kvm_resume_vm(
     kvm->pause_count = 0;
 
     return VMI_SUCCESS;
-#endif
-    return VMI_FAILURE;
 }

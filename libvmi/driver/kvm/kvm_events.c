@@ -630,7 +630,6 @@ process_descriptor(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 static status_t
 process_pause_event(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
-#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event)
         return VMI_FAILURE;
@@ -640,7 +639,6 @@ process_pause_event(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     // the pause event should have been poped by kvm_resume_vm
     // report to the user
     errprint("Unexpected PAUSE event while listening. Did you forget to resume the VM ?\n");
-#endif
 
     // always fail, so kvm_events_listen can fail too
     return VMI_FAILURE;
@@ -1027,7 +1025,6 @@ kvm_events_listen(
 
     GSList *loop;
 
-#if 0
     if (kvm_process_events_with_timeout(vmi, timeout) == VMI_FAILURE) {
         return VMI_FAILURE;
     }
@@ -1042,7 +1039,7 @@ kvm_events_listen(
     if (vmi->swap_events || (vmi->clear_events && g_hash_table_size(vmi->clear_events))) {
         if (kvm_pause_vm(vmi) == VMI_FAILURE) {
             return VMI_FAILURE;
-        }
+	}
         if (process_pending_events(vmi) == VMI_FAILURE) {
             return VMI_FAILURE;
         }
@@ -1065,7 +1062,6 @@ kvm_events_listen(
             return VMI_FAILURE;
         }
     }
-#endif
 
     return VMI_SUCCESS;
 }
