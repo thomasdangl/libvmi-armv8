@@ -453,6 +453,7 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
 #endif
+    printf("GOT TO EVENT!\n");
     return VMI_FAILURE;
 }
 
@@ -786,14 +787,16 @@ kvm_events_init(
     vmi->driver.set_cpuid_event_ptr = &kvm_set_cpuid_event;
 
     // fill event dispatcher
+    kvm->process_event[KVMI_EVENT_PAUSE_VCPU] = &process_pause_event;
+    kvm->process_event[KVMI_EVENT_BREAKPOINT] = &process_interrupt;
+#if 0
     kvm->process_event[KVMI_EVENT_CR] = &process_register;
     kvm->process_event[KVMI_EVENT_MSR] = &process_msr;
-    kvm->process_event[KVMI_EVENT_BREAKPOINT] = &process_interrupt;
     kvm->process_event[KVMI_EVENT_PF] = &process_pagefault;
     kvm->process_event[KVMI_EVENT_DESCRIPTOR] = &process_descriptor;
-    kvm->process_event[KVMI_EVENT_PAUSE_VCPU] = &process_pause_event;
     kvm->process_event[KVMI_EVENT_SINGLESTEP] = &process_singlestep;
     kvm->process_event[KVMI_EVENT_CPUID] = &process_cpuid;
+#endif
 
     // enable interception of CR/MSR/PF for all VCPUs by default
     // since this has no performance cost
@@ -855,6 +858,11 @@ kvm_events_destroy(
     if (VMI_FAILURE == kvm_pause_vm(vmi))
         errprint("--Failed to pause VM while destroying events\n");
 
+    if (kvm->monitor_intr_on) {
+        interrupt_event_t intrevent = { .intr = INT3 };
+        kvm_set_intr_access(vmi, &intrevent, false);
+    }
+
 #if 0
     reg_event_t regevent = { .in_access = VMI_REGACCESS_N };
     if (kvm->monitor_cr0_on) {
@@ -879,12 +887,6 @@ kvm_events_destroy(
         // disable MSR_ALL
         regevent.reg = MSR_ALL;
         kvm_set_reg_access(vmi, &regevent);
-    }
-
-    if (kvm->monitor_intr_on) {
-        // disable INT3
-        interrupt_event_t intrevent = { .intr = INT3 };
-        kvm_set_intr_access(vmi, &intrevent, false);
     }
 
     if (kvm->monitor_desc_on) {
@@ -1469,10 +1471,12 @@ kvm_shutdown_single_step(
     }
 #endif
 
+#if 0
     dbprint(VMI_DEBUG_KVM, "--Shutting down single step\n");
     for (unsigned int vcpu = 0; vcpu < vmi->num_vcpus; vcpu++)
         if (kvm_stop_single_step(vmi, vcpu))
             return VMI_FAILURE;
+#endif
 
     // disabling singlestep monitoring is done at driver destroy
     return VMI_SUCCESS;

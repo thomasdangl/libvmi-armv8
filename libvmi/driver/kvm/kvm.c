@@ -929,7 +929,22 @@ kvm_set_vcpureg(vmi_instance_t vmi,
                 reg_t reg,
                 unsigned long vcpu)
 {
-#if 0
+#if defined(ARM32) || defined(ARM64)
+    struct kvm_regs regs = {0};
+    struct kvm_sregs sregs = {0};
+    kvm_instance_t *kvm = kvm_get_instance(vmi);
+
+    if (!kvm->kvmi_dom)
+        return VMI_FAILURE;
+
+    if (kvm->libkvmi.kvmi_get_registers(kvm->kvmi_dom, vcpu, &regs, &sregs, NULL, NULL))
+        return VMI_FAILURE;
+
+    // TODO: write the actual register.
+
+    if (kvm->libkvmi.kvmi_set_registers(kvm->kvmi_dom, vcpu, &regs) < 0)
+        return VMI_FAILURE;
+#else
     kvm_instance_t *kvm = kvm_get_instance(vmi);
     if (!kvm->kvmi_dom)
         return VMI_FAILURE;
@@ -942,9 +957,8 @@ kvm_set_vcpureg(vmi_instance_t vmi,
     } msrs = {0};
     msrs.msrs.nmsrs = 0;
 
-    if (kvm->libkvmi.kvmi_get_registers(kvm->kvmi_dom, vcpu, &regs, &sregs, &msrs.msrs, &mode) < 0) {
+    if (kvm->libkvmi.kvmi_get_registers(kvm->kvmi_dom, vcpu, &regs, &sregs, &msrs.msrs, &mode) < 0)
         return VMI_FAILURE;
-    }
 
     // This could use a macro or something
     switch (reg) {
@@ -1006,14 +1020,11 @@ kvm_set_vcpureg(vmi_instance_t vmi,
             return VMI_FAILURE;
     }
 
-    if (kvm->libkvmi.kvmi_set_registers(kvm->kvmi_dom, vcpu, &regs) < 0) {
+    if (kvm->libkvmi.kvmi_set_registers(kvm->kvmi_dom, vcpu, &regs) < 0)
         return VMI_FAILURE;
-    }
+#endif
 
     return VMI_SUCCESS;
-
-#endif
-    return VMI_FAILURE;
 }
 
 status_t
@@ -1021,7 +1032,12 @@ kvm_set_vcpuregs(vmi_instance_t vmi,
                  registers_t *registers,
                  unsigned long vcpu)
 {
-#if 0
+#if defined(ARM32) || defined(ARM64)
+    kvm_instance_t *kvm = kvm_get_instance(vmi);
+    if (!kvm->kvmi_dom)
+        return VMI_FAILURE;
+    // TODO: write the actual registers.
+#else
     kvm_instance_t *kvm = kvm_get_instance(vmi);
     if (!kvm->kvmi_dom)
         return VMI_FAILURE;
@@ -1046,12 +1062,10 @@ kvm_set_vcpuregs(vmi_instance_t vmi,
         .rip = x86->rip,
         .rflags = x86->rflags
     };
-    if (kvm->libkvmi.kvmi_set_registers(kvm->kvmi_dom, vcpu, &regs) < 0) {
+    if (kvm->libkvmi.kvmi_set_registers(kvm->kvmi_dom, vcpu, &regs) < 0)
         return VMI_FAILURE;
-    }
-    return VMI_SUCCESS;
 #endif
-    return VMI_FAILURE;
+    return VMI_SUCCESS;
 }
 
 status_t

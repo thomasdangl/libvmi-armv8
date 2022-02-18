@@ -32,7 +32,7 @@
 #include <libvmi/libvmi.h>
 #include <libvmi/events.h>
 
-char BREAKPOINT = 0xcc;
+uint32_t BREAKPOINT = 0x000020d4;
 
 static int interrupted = 0;
 static void close_handler(int sig)
@@ -43,12 +43,13 @@ static void close_handler(int sig)
 struct bp_cb_data {
     char *symbol;
     addr_t sym_vaddr;
-    char saved_opcode;
+    uint32_t saved_instruction;
     uint64_t hit_count;
 };
 
 event_response_t breakpoint_cb(vmi_instance_t vmi, vmi_event_t *event)
 {
+#if 0
     (void)vmi;
     if (!event->data) {
         fprintf(stderr, "Empty event data in breakpoint callback !\n");
@@ -96,8 +97,11 @@ event_response_t breakpoint_cb(vmi_instance_t vmi, vmi_event_t *event)
         // enable singlestep
         return VMI_EVENT_RESPONSE_TOGGLE_SINGLESTEP;
     }
+#endif
+    return VMI_EVENT_RESPONSE_NONE;
 }
 
+#if 0
 event_response_t single_step_cb(vmi_instance_t vmi, vmi_event_t *event)
 {
     (void)vmi;
@@ -126,6 +130,7 @@ event_response_t single_step_cb(vmi_instance_t vmi, vmi_event_t *event)
     // disable singlestep
     return VMI_EVENT_RESPONSE_TOGGLE_SINGLESTEP;
 }
+#endif
 
 int main (int argc, char **argv)
 {
@@ -133,7 +138,7 @@ int main (int argc, char **argv)
     vmi_instance_t vmi = {0};
     vmi_init_data_t *init_data = NULL;
     int retcode = 1;
-    char saved_opcode = 0;
+    uint32_t saved_instruction = 0;
 
     char *name = NULL;
 
@@ -189,18 +194,34 @@ int main (int argc, char **argv)
         goto error_exit;
     }
 
+    // TODO:
+    uint32_t buf[12];
+    if (VMI_SUCCESS == vmi_read_va(vmi, sym_vaddr, 0, sizeof(buf), buf, NULL)) {
+	for (size_t i = 0; i < 12; i++)
+		printf("%x\n", buf[i]);
+    }
+
     // save opcode
     printf("Save opcode\n");
-    if (VMI_FAILURE == vmi_read_va(vmi, sym_vaddr, 0, sizeof(BREAKPOINT), &saved_opcode, NULL)) {
+    if (VMI_FAILURE == vmi_read_va(vmi, sym_vaddr + 8, 0, sizeof(BREAKPOINT), &saved_instruction, NULL)) {
         fprintf(stderr, "Failed to read opcode\n");
         goto error_exit;
     }
 
     // write breakpoint
-    printf("Write breakpoint at 0x%" PRIx64 "\n", sym_vaddr);
-    if (VMI_FAILURE == vmi_write_va(vmi, sym_vaddr, 0, sizeof(BREAKPOINT), &BREAKPOINT, NULL)) {
+    printf("Write breakpoint at 0x%" PRIx64 "\n", sym_vaddr + 8);
+    if (VMI_FAILURE == vmi_write_va(vmi, sym_vaddr + 8, 0, sizeof(BREAKPOINT), &BREAKPOINT, NULL)) {
         fprintf(stderr, "Failed to write breakpoint\n");
         goto error_exit;
+    }
+
+    // flush original code from cache
+    vmi_pagecache_flush(vmi);
+
+    // TODO:
+    if (VMI_SUCCESS == vmi_read_va(vmi, sym_vaddr, 0, sizeof(buf), buf, NULL)) {
+	for (size_t i = 0; i < 12; i++)
+		printf("%x\n", buf[i]);
     }
 
     // register int3 event
@@ -214,8 +235,8 @@ int main (int argc, char **argv)
     // fill and pass struct bp_cb_data
     struct bp_cb_data cb_data = {
         .symbol = symbol,
-        .sym_vaddr = sym_vaddr,
-        .saved_opcode = saved_opcode,
+        .sym_vaddr = sym_vaddr + 8,
+        .saved_instruction = saved_instruction,
         .hit_count = 0,
     };
     int_event.data = (void*)&cb_data;
@@ -226,6 +247,7 @@ int main (int argc, char **argv)
         goto error_exit;
     }
 
+#if 0
     // get number of vcpus
     unsigned int num_vcpus = vmi_get_num_vcpus(vmi);
 
@@ -247,6 +269,7 @@ int main (int argc, char **argv)
         fprintf(stderr, "Failed to register singlestep event\n");
         goto error_exit;
     }
+#endif
 
     // resume VM
     printf("Resume VM\n");
@@ -268,18 +291,21 @@ int main (int argc, char **argv)
     retcode = 0;
 error_exit:
     vmi_pause_vm(vmi);
-    // restore opcode if needed
-    if (saved_opcode) {
-        printf("Restore previous opcode at 0x%" PRIx64 "\n", sym_vaddr);
-        vmi_write_va(vmi, sym_vaddr, 0, sizeof(BREAKPOINT), &saved_opcode, NULL);
+
+    // restore instruction if needed
+    if (saved_instruction) {
+        printf("Restore previous opcode at 0x%" PRIx64 "\n", sym_vaddr + 8);
+        vmi_write_va(vmi, sym_vaddr + 8, 0, sizeof(BREAKPOINT), &saved_instruction, NULL);
     }
 
+#if 0
     // cleanup queue
     if (vmi_are_events_pending(vmi))
         vmi_events_listen(vmi, 0);
 
     vmi_clear_event(vmi, &int_event, NULL);
     vmi_clear_event(vmi, &sstep_event, NULL);
+#endif
 
     vmi_resume_vm(vmi);
     vmi_destroy(vmi);
