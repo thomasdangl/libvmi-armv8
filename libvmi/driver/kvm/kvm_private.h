@@ -90,12 +90,20 @@ kvm_put_memory(vmi_instance_t vmi,
                void *buf);
 
 // shared by kvm.c and kvm_events.c
-# ifndef ENABLE_KVM_LEGACY
+#ifndef ENABLE_KVM_LEGACY
+#if !defined(ARM32) && !defined(ARM64)
 void
 kvmi_regs_to_libvmi(
     struct kvm_regs *kvmi_regs,
     struct kvm_sregs *kvmi_sregs,
     x86_registers_t *libvmi_regs);
-# endif
+#else
+void
+kvmi_regs_to_libvmi(
+    struct kvm_regs *kvmi_regs,
+    struct kvm_sregs *kvmi_sregs,
+    arm_registers_t *libvmi_regs);
+#endif
+#endif
 
 #endif

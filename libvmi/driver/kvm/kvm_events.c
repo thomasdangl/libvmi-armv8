@@ -28,6 +28,12 @@
 #include "kvm_events.h"
 #include "kvm_private.h"
 
+#if defined(ARM32) || defined(ARM64)
+
+#define PSR_BTYPE_MASK 0x00000c00
+#define DBG_SPSR_SS (1 << 21)
+
+#endif
 
 // helper struct for process_cb_response_emulate to avoid ugly
 // pointer arithmetic to find back pf field in process_cb_response_emulate()
@@ -167,7 +173,6 @@ process_cb_response(
     void *rpl,
     size_t rpl_size)
 {
-#if 0
     kvm_instance_t *kvm = kvm_get_instance(vmi);
 #ifdef ENABLE_SAFETY_CHECKS
     if (!kvm || !kvm->kvmi_dom) {
@@ -184,7 +189,7 @@ process_cb_response(
     }
 #endif
 
-    unsigned int vcpu = kvmi_event->event.common.vcpu;
+    unsigned int vcpu = kvmi_event->event.common.ev.vcpu;
     assert(vcpu < vmi->num_vcpus);
     status_t status = VMI_FAILURE;
     registers_t regs = {0};
@@ -198,7 +203,11 @@ process_cb_response(
         if (response & candidate) {
             switch (candidate) {
                 case VMI_EVENT_RESPONSE_SET_REGISTERS:
+#if defined(ARM32) || defined(ARM64)
+                    regs.arm = (*libvmi_event->arm_regs);
+#else
                     regs.x86 = (*libvmi_event->x86_regs);
+#endif
                     if (VMI_FAILURE == kvm_set_vcpuregs(vmi, &regs, libvmi_event->vcpu_id)) {
                         errprint("%s: KVM: failed to set registers in callback response\n", __func__);
                         return VMI_FAILURE;
@@ -228,8 +237,6 @@ process_cb_response(
         return VMI_FAILURE;
 
     return VMI_SUCCESS;
-#endif
-    return VMI_FAILURE;
 }
 
 static event_response_t
@@ -400,7 +407,6 @@ process_msr(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 static status_t
 process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
-#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event)
         return VMI_FAILURE;
@@ -417,6 +423,18 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 #endif
 
     // fill libvmi_event struct
+    libvmi_event->vcpu_id = kvmi_event->event.common.ev.vcpu;
+#if defined(ARM32) || defined(ARM64)
+    arm_registers_t regs = {0};
+    libvmi_event->arm_regs = &regs;
+    struct kvm_regs *kvmi_regs = &kvmi_event->event.common.ev.arch.regs;
+    struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.ev.arch.sregs;
+    kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->arm_regs);
+    // TODO: make this stuff platform agnostic.
+    //libvmi_event->interrupt_event.gfn = kvmi_event->event.breakpoint.gpa >> vmi->page_shift;
+    //libvmi_event->interrupt_event.offset = kvmi_event->event.common.arch.regs.rip & VMI_BIT_MASK(0,11);
+    //libvmi_event->interrupt_event.gla = kvmi_event->event.common.arch.regs.rip;
+#else
     x86_registers_t regs = {0};
     libvmi_event->x86_regs = &regs;
     struct kvm_regs *kvmi_regs = &kvmi_event->event.common.arch.regs;
@@ -428,6 +446,8 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     libvmi_event->interrupt_event.gfn = kvmi_event->event.breakpoint.gpa >> vmi->page_shift;
     libvmi_event->interrupt_event.offset = kvmi_event->event.common.arch.regs.rip & VMI_BIT_MASK(0,11);
     libvmi_event->interrupt_event.gla = kvmi_event->event.common.arch.regs.rip;
+#endif
+
     // default reinject behavior: invalid
     libvmi_event->interrupt_event.reinject = -1;
 
@@ -441,8 +461,8 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     } rpl = {0};
 
     // set reply action
-    rpl.hdr.vcpu = kvmi_event->event.common.vcpu;
-    rpl.common.event = kvmi_event->event.common.event;
+    rpl.hdr.vcpu = kvmi_event->event.common.ev.vcpu;
+    rpl.common.event = kvmi_event->event.common.hdr.event;
     // default action is RETRY: KVM will re-enter the guest
     rpl.common.action = KVMI_EVENT_ACTION_RETRY;
 
@@ -450,11 +470,14 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     // the introspection tool did nothing (reinject int3)
     if (libvmi_event->interrupt_event.reinject)
         rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
+    else
+    {
+        // stop single step and clear BYTPE mask
+        libvmi_event->arm_regs->pstate &= ~(PSR_BTYPE_MASK | DBG_SPSR_SS);
+        kvm_set_vcpuregs(vmi, libvmi_event->arm_regs, libvmi_event->vcpu_id);
+    }
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
-#endif
-    printf("GOT TO EVENT!\n");
-    return VMI_FAILURE;
 }
 
 static status_t

@@ -164,6 +164,37 @@ kvmi_regs_to_libvmi(
     // assign
     (*libvmi_regs) = x86_regs;
 }
+#else
+void
+kvmi_regs_to_libvmi(
+    struct kvm_regs *kvmi_regs,
+    struct kvm_sregs *kvmi_sregs,
+    arm_registers_t *libvmi_regs)
+{
+    arm_registers_t arm_regs = {0};
+
+    memcpy(arm_regs.regs, kvmi_regs->regs.regs, sizeof(uint64_t) * 31);
+    arm_regs.sp = kvmi_regs->regs.sp;
+    arm_regs.pc = kvmi_regs->regs.pc;
+    arm_regs.pstate = kvmi_regs->regs.pstate;
+
+    arm_regs.sp_el1 = kvmi_regs->sp_el1;
+    arm_regs.elr_el1 = kvmi_regs->elr_el1;
+
+    memcpy(arm_regs.spsr, kvmi_regs->spsr, sizeof(uint64_t) * 5);
+
+    memcpy(arm_regs.vregs, kvmi_regs->fp_regs.vregs, sizeof(__uint128_t) * 32);
+    arm_regs.fpsr = kvmi_regs->fp_regs.fpsr;
+    arm_regs.fpcr = kvmi_regs->fp_regs.fpcr;
+    memcpy(arm_regs.reserved, kvmi_regs->fp_regs.__reserved, sizeof(uint32_t) * 2);
+
+    arm_regs.ttbr0 = kvmi_sregs->sys_regs[7];
+    arm_regs.ttbr1 = kvmi_sregs->sys_regs[8];
+    arm_regs.ttbcr = kvmi_sregs->sys_regs[9];
+
+    // assign
+    (*libvmi_regs) = arm_regs;
+}
 #endif
 
 void *
@@ -732,7 +763,7 @@ kvm_get_vcpureg(
             *value = regs.arm.ttbcr;
             break;
 	case CPSR:
-	    *value = regs.arm.cpsr;
+	    *value = regs.arm.pstate;
 	    break;
 	case PC:
 	    *value = regs.arm.pc;
@@ -875,11 +906,7 @@ kvm_get_vcpuregs(
     if (kvm->libkvmi.kvmi_get_registers(kvm->kvmi_dom, vcpu, &regs, &sregs, NULL, NULL))
         return VMI_FAILURE;
 
-    arm->ttbr0 = sregs.sys_regs[7];
-    arm->ttbr1 = sregs.sys_regs[8];
-    arm->ttbcr = sregs.sys_regs[9];
-    arm->pc = regs.regs.pc;
-    arm->cpsr = regs.regs.pstate;
+    kvmi_regs_to_libvmi(&regs, &sregs, arm);
 #else
     struct kvm_regs regs = {0};
     struct kvm_sregs sregs = {0};
@@ -940,7 +967,16 @@ kvm_set_vcpureg(vmi_instance_t vmi,
     if (kvm->libkvmi.kvmi_get_registers(kvm->kvmi_dom, vcpu, &regs, &sregs, NULL, NULL))
         return VMI_FAILURE;
 
-    // TODO: write the actual register.
+    switch (reg) {
+	case CPSR:
+	    regs.regs.pstate = value;
+	    break;
+	case PC:
+	    regs.regs.pc = value;
+	    break;
+        default:
+            return VMI_FAILURE;
+    }
 
     if (kvm->libkvmi.kvmi_set_registers(kvm->kvmi_dom, vcpu, &regs) < 0)
         return VMI_FAILURE;
@@ -1036,7 +1072,26 @@ kvm_set_vcpuregs(vmi_instance_t vmi,
     kvm_instance_t *kvm = kvm_get_instance(vmi);
     if (!kvm->kvmi_dom)
         return VMI_FAILURE;
-    // TODO: write the actual registers.
+    arm_registers_t *arm = &registers->arm;
+    struct kvm_regs regs = { 0 };
+
+    memcpy(regs.regs.regs, arm->regs, sizeof(uint64_t) * 31);
+    regs.regs.sp = arm->sp;
+    regs.regs.pc = arm->pc;
+    regs.regs.pstate = arm->pstate;
+
+    regs.sp_el1 = arm->sp_el1;
+    regs.elr_el1 = arm->elr_el1;
+
+    memcpy(regs.spsr, arm->spsr, sizeof(uint64_t) * 5);
+
+    memcpy(regs.fp_regs.vregs, arm->vregs, sizeof(__uint128_t) * 32);
+    regs.fp_regs.fpsr = arm->fpsr;
+    regs.fp_regs.fpcr = arm->fpcr;
+    memcpy(regs.fp_regs.__reserved, arm->reserved, sizeof(uint32_t) * 2);
+
+    if (kvm->libkvmi.kvmi_set_registers(kvm->kvmi_dom, vcpu, &regs) < 0)
+        return VMI_FAILURE;
 #else
     kvm_instance_t *kvm = kvm_get_instance(vmi);
     if (!kvm->kvmi_dom)

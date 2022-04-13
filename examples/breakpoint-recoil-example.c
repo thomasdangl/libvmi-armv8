@@ -32,7 +32,7 @@
 #include <libvmi/libvmi.h>
 #include <libvmi/events.h>
 
-uint32_t BREAKPOINT = 0x000020d4;
+uint32_t BREAKPOINT = 0xd4200000;
 
 static int interrupted = 0;
 static void close_handler(int sig)
@@ -49,8 +49,8 @@ struct bp_cb_data {
 
 event_response_t breakpoint_cb(vmi_instance_t vmi, vmi_event_t *event)
 {
-#if 0
     (void)vmi;
+#if 0
     if (!event->data) {
         fprintf(stderr, "Empty event data in breakpoint callback !\n");
         interrupted = true;
@@ -98,6 +98,34 @@ event_response_t breakpoint_cb(vmi_instance_t vmi, vmi_event_t *event)
         return VMI_EVENT_RESPONSE_TOGGLE_SINGLESTEP;
     }
 #endif
+
+    if (!event->data) {
+        fprintf(stderr, "Empty event data in breakpoint callback !\n");
+        interrupted = true;
+        return VMI_EVENT_RESPONSE_NONE;
+    }
+
+    // get back callback data struct
+    struct bp_cb_data *cb_data = (struct bp_cb_data*)event->data;
+
+    // default reinjection behavior
+    event->interrupt_event.reinject = 1;
+
+    if (event->arm_regs->pc != cb_data->sym_vaddr) {
+        // not our breakpoint
+        printf("Not our breakpoint. Reinjecting INT3\n");
+        return VMI_EVENT_RESPONSE_NONE;
+    }
+
+    // skip over the instruction
+    event->arm_regs->pc += 4;
+
+    // our breakpoint
+    // do not reinject
+    event->interrupt_event.reinject = 0;
+    printf("[%"PRIu32"] Breakpoint hit at %s. Count: %"PRIu64"\n", event->vcpu_id, cb_data->symbol, cb_data->hit_count);
+    cb_data->hit_count++;
+
     return VMI_EVENT_RESPONSE_NONE;
 }
 

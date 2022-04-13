@@ -624,12 +624,24 @@ typedef struct x86_regs {
 } x86_registers_t;
 
 typedef struct arm_registers {
+    uint64_t regs[31];
+    uint64_t sp;
+    uint64_t pc;
+    uint64_t pstate;
+
+    uint64_t sp_el1;
+    uint64_t elr_el1;
+
+    uint64_t spsr[5];
+
+    __uint128_t vregs[32];
+    uint32_t fpsr;
+    uint32_t fpcr;
+    uint32_t reserved[2];
+
     uint64_t ttbr0;
     uint64_t ttbr1;
     uint64_t ttbcr;
-    uint64_t pc;
-    uint32_t cpsr;
-    uint32_t _pad;
 } arm_registers_t;
 
 typedef struct registers {

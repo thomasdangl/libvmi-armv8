@@ -94,9 +94,11 @@ validate_and_return_data(
 
         GList* lru_entry = g_queue_find(vmi->memory_cache_lru,
                                         GSIZE_TO_POINTER(entry->paddr));
-        g_queue_unlink(vmi->memory_cache_lru,
-                       lru_entry);
-        g_queue_push_head_link(vmi->memory_cache_lru, lru_entry);
+        if (lru_entry) {
+            g_queue_unlink(vmi->memory_cache_lru,
+                           lru_entry);
+            g_queue_push_head_link(vmi->memory_cache_lru, lru_entry);
+        }
     }
     entry->last_used = now;
     return entry->data;
