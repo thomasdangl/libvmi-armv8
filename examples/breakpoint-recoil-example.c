@@ -117,23 +117,25 @@ event_response_t breakpoint_cb(vmi_instance_t vmi, vmi_event_t *event)
         return VMI_EVENT_RESPONSE_NONE;
     }
 
-    // skip over the instruction
-    event->arm_regs->pc += 4;
-
     // our breakpoint
     // do not reinject
     event->interrupt_event.reinject = 0;
     printf("[%"PRIu32"] Breakpoint hit at %s. Count: %"PRIu64"\n", event->vcpu_id, cb_data->symbol, cb_data->hit_count);
     cb_data->hit_count++;
 
-    return VMI_EVENT_RESPONSE_NONE;
+    // recoil
+    // write saved opcode
+    if (VMI_FAILURE == vmi_write_va(vmi, event->arm_regs->pc, 0, sizeof(BREAKPOINT), &cb_data->saved_instruction, NULL)) {
+        fprintf(stderr, "Failed to write back original opcode at 0x%" PRIx64 "\n", event->arm_regs->pc);
+        interrupted = true;
+        return VMI_EVENT_RESPONSE_NONE;
+    }
+
+    return VMI_EVENT_RESPONSE_TOGGLE_SINGLESTEP;
 }
 
-#if 0
 event_response_t single_step_cb(vmi_instance_t vmi, vmi_event_t *event)
 {
-    (void)vmi;
-
     if (!event->data) {
         fprintf(stderr, "Empty event data in singlestep callback !\n");
         interrupted = true;
@@ -142,11 +144,7 @@ event_response_t single_step_cb(vmi_instance_t vmi, vmi_event_t *event)
 
     // get back callback data struct
     struct bp_cb_data *cb_data = (struct bp_cb_data*)event->data;
-
-    // printf("Single-step event: VCPU:%u  GFN %"PRIx64" GLA %016"PRIx64"\n",
-    //        event->vcpu_id,
-    //        event->ss_event.gfn,
-    //        event->ss_event.gla);
+    printf("Single-step event: VCPU: %u\n", event->vcpu_id);
 
     // restore breakpoint
     if (VMI_FAILURE == vmi_write_va(vmi, cb_data->sym_vaddr, 0, sizeof(BREAKPOINT), &BREAKPOINT, NULL)) {
@@ -158,7 +156,6 @@ event_response_t single_step_cb(vmi_instance_t vmi, vmi_event_t *event)
     // disable singlestep
     return VMI_EVENT_RESPONSE_TOGGLE_SINGLESTEP;
 }
-#endif
 
 int main (int argc, char **argv)
 {
@@ -275,7 +272,6 @@ int main (int argc, char **argv)
         goto error_exit;
     }
 
-#if 0
     // get number of vcpus
     unsigned int num_vcpus = vmi_get_num_vcpus(vmi);
 
@@ -297,7 +293,6 @@ int main (int argc, char **argv)
         fprintf(stderr, "Failed to register singlestep event\n");
         goto error_exit;
     }
-#endif
 
     // resume VM
     printf("Resume VM\n");
@@ -326,14 +321,12 @@ error_exit:
         vmi_write_va(vmi, sym_vaddr + 8, 0, sizeof(BREAKPOINT), &saved_instruction, NULL);
     }
 
-#if 0
     // cleanup queue
     if (vmi_are_events_pending(vmi))
         vmi_events_listen(vmi, 0);
 
     vmi_clear_event(vmi, &int_event, NULL);
     vmi_clear_event(vmi, &sstep_event, NULL);
-#endif
 
     vmi_resume_vm(vmi);
     vmi_destroy(vmi);

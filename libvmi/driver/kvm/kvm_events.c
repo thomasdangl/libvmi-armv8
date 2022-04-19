@@ -29,10 +29,7 @@
 #include "kvm_private.h"
 
 #if defined(ARM32) || defined(ARM64)
-
-#define PSR_BTYPE_MASK 0x00000c00
-#define DBG_SPSR_SS (1 << 21)
-
+#define PSR_BTYPE_MASK 0xc00
 #endif
 
 // helper struct for process_cb_response_emulate to avoid ugly
@@ -472,9 +469,9 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
         rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
     else
     {
-        // stop single step and clear BYTPE mask
-        libvmi_event->arm_regs->pstate &= ~(PSR_BTYPE_MASK | DBG_SPSR_SS);
-        kvm_set_vcpuregs(vmi, libvmi_event->arm_regs, libvmi_event->vcpu_id);
+        // clear BYTPE mask
+        libvmi_event->arm_regs->pstate &= ~PSR_BTYPE_MASK;
+        kvm_set_vcpuregs(vmi, (registers_t*) libvmi_event->arm_regs, libvmi_event->vcpu_id);
     }
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
@@ -671,7 +668,6 @@ process_pause_event(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 status_t
 process_singlestep(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
-#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event)
         return VMI_FAILURE;
@@ -682,7 +678,7 @@ process_singlestep(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 
     if (!vmi->shutting_down && !kvmi_event->event.ss.failed) {
         // lookup vmi_event
-        libvmi_event = g_hash_table_lookup(vmi->ss_events, GUINT_TO_POINTER(kvmi_event->event.common.vcpu));
+        libvmi_event = g_hash_table_lookup(vmi->ss_events, GUINT_TO_POINTER(kvmi_event->event.common.ev.vcpu));
 #ifdef ENABLE_SAFETY_CHECKS
         if ( !libvmi_event ) {
             errprint("%s error: no single step event handler is registered in LibVMI\n", __func__);
@@ -691,19 +687,29 @@ process_singlestep(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 #endif
 
         // assign VCPU id
-        libvmi_event->vcpu_id = kvmi_event->event.common.vcpu;
+        libvmi_event->vcpu_id = kvmi_event->event.common.ev.vcpu;
         // assign regs
         x86_registers_t libvmi_regs = {0};
-        libvmi_event->x86_regs = &libvmi_regs;
-        struct kvm_regs *regs = &kvmi_event->event.common.arch.regs;
-        struct kvm_sregs *sregs = &kvmi_event->event.common.arch.sregs;
-        kvmi_regs_to_libvmi(regs, sregs, libvmi_event->x86_regs);
+#if defined(ARM32) || defined(ARM64)
+	arm_registers_t regs = {0};
+	libvmi_event->arm_regs = &regs;
+	struct kvm_regs *kvmi_regs = &kvmi_event->event.common.ev.arch.regs;
+	struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.ev.arch.sregs;
+	kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->arm_regs);
+	// TODO: make this stuff platform agnostic.
+	//libvmi_event->ss_event.gla = libvmi_event->x86_regs->rip;
+#else
+	x86_registers_t regs = {0};
+	libvmi_event->x86_regs = &regs;
+	struct kvm_regs *kvmi_regs = &kvmi_event->event.common.arch.regs;
+	struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.arch.sregs;
+	kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->x86_regs);
 
         // TODO ss_event
         // gfn
         // offset
         libvmi_event->ss_event.gla = libvmi_event->x86_regs->rip;
-
+#endif
         // call user callback
         response = call_event_callback(vmi, libvmi_event);
     }
@@ -715,13 +721,11 @@ process_singlestep(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     } rpl = {0};
 
     // set reply action
-    rpl.hdr.vcpu = kvmi_event->event.common.vcpu;
-    rpl.common.event = kvmi_event->event.common.event;
+    rpl.hdr.vcpu = kvmi_event->event.common.ev.vcpu;
+    rpl.common.event = kvmi_event->event.common.hdr.event;
     rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
-#endif
-    return VMI_FAILURE;
 }
 
 static status_t
@@ -812,12 +816,12 @@ kvm_events_init(
     // fill event dispatcher
     kvm->process_event[KVMI_EVENT_PAUSE_VCPU] = &process_pause_event;
     kvm->process_event[KVMI_EVENT_BREAKPOINT] = &process_interrupt;
+    kvm->process_event[KVMI_EVENT_SINGLESTEP] = &process_singlestep;
 #if 0
     kvm->process_event[KVMI_EVENT_CR] = &process_register;
     kvm->process_event[KVMI_EVENT_MSR] = &process_msr;
     kvm->process_event[KVMI_EVENT_PF] = &process_pagefault;
     kvm->process_event[KVMI_EVENT_DESCRIPTOR] = &process_descriptor;
-    kvm->process_event[KVMI_EVENT_SINGLESTEP] = &process_singlestep;
     kvm->process_event[KVMI_EVENT_CPUID] = &process_cpuid;
 #endif
 
@@ -828,8 +832,8 @@ kvm_events_init(
     //  MSR:        kvmi_control_msr()
     //  PF:         kvmi_set_page_access
     //  singlestep: kvmi_control_singlestep()
-#if 0
     for (unsigned int vcpu = 0; vcpu < vmi->num_vcpus; vcpu++) {
+#if 0
         if (kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_CR, true)) {
             errprint("--Failed to enable CR interception\n");
             goto err_exit;
@@ -842,6 +846,7 @@ kvm_events_init(
             errprint("--Failed to enable page fault interception\n");
             goto err_exit;
         }
+#endif
 
         if (kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_SINGLESTEP, true)) {
             errprint("--Failed to enable singlestep monitoring\n");
@@ -853,15 +858,15 @@ kvm_events_init(
 err_exit:
     // disable CR/MSR/PF/singlestep monitoring
     for (unsigned int vcpu = 0; vcpu < vmi->num_vcpus; vcpu++) {
+#if 0
         kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_CR, false);
         kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_MSR, false);
         kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_PF, false);
-        kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_SINGLESTEP, false);
+#endif
+	kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_SINGLESTEP, false);
     }
 
     return VMI_FAILURE;
-#endif
-    return VMI_SUCCESS;
 }
 
 void
