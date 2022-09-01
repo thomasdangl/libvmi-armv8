@@ -467,12 +467,6 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     // the introspection tool did nothing (reinject int3)
     if (libvmi_event->interrupt_event.reinject)
         rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
-    else
-    {
-        // clear BYTPE mask
-        libvmi_event->arm_regs->pstate &= ~PSR_BTYPE_MASK;
-        kvm_set_vcpuregs(vmi, (registers_t*) libvmi_event->arm_regs, libvmi_event->vcpu_id);
-    }
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
 }

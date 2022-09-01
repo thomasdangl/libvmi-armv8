@@ -49,56 +49,6 @@ struct bp_cb_data {
 
 event_response_t breakpoint_cb(vmi_instance_t vmi, vmi_event_t *event)
 {
-    (void)vmi;
-#if 0
-    if (!event->data) {
-        fprintf(stderr, "Empty event data in breakpoint callback !\n");
-        interrupted = true;
-        return VMI_EVENT_RESPONSE_NONE;
-    }
-    // get back callback data struct
-    struct bp_cb_data *cb_data = (struct bp_cb_data*)event->data;
-
-    // default reinjection behavior
-    event->interrupt_event.reinject = 1;
-    // printf("INT3 event: GFN=%"PRIx64" RIP=%"PRIx64" Length: %"PRIu32"\n",
-    //        event->interrupt_event.gfn, event->interrupt_event.gla,
-    //        event->interrupt_event.insn_length);
-
-    /*
-     * By default int3 instructions have length of 1 byte unless
-     * there are prefixes attached. As adding prefixes to int3 have
-     * no effect, under normal circumstances no legitimate compiler/debugger
-     * would add any. However, a malicious guest could add prefixes to change
-     * the instruction length. Older Xen versions (prior to 4.8) don't include this
-     * information and thus this length is reported as 0. In those cases the length
-     * have to be established manually, or assume a non-malicious guest as we do here.
-     */
-    if ( !event->interrupt_event.insn_length )
-        event->interrupt_event.insn_length = 1;
-
-    if (event->x86_regs->rip != cb_data->sym_vaddr) {
-        // not our breakpoint
-        printf("Not our breakpoint. Reinjecting INT3\n");
-        return VMI_EVENT_RESPONSE_NONE;
-    } else {
-        // our breakpoint
-        // do not reinject
-        event->interrupt_event.reinject = 0;
-        printf("[%"PRIu32"] Breakpoint hit at %s. Count: %"PRIu64"\n", event->vcpu_id, cb_data->symbol, cb_data->hit_count);
-        cb_data->hit_count++;
-        // recoil
-        // write saved opcode
-        if (VMI_FAILURE == vmi_write_va(vmi, event->x86_regs->rip, 0, sizeof(BREAKPOINT), &cb_data->saved_opcode, NULL)) {
-            fprintf(stderr, "Failed to write back original opcode at 0x%" PRIx64 "\n", event->x86_regs->rip);
-            interrupted = true;
-            return VMI_EVENT_RESPONSE_NONE;
-        }
-        // enable singlestep
-        return VMI_EVENT_RESPONSE_TOGGLE_SINGLESTEP;
-    }
-#endif
-
     if (!event->data) {
         fprintf(stderr, "Empty event data in breakpoint callback !\n");
         interrupted = true;
@@ -144,11 +94,11 @@ event_response_t single_step_cb(vmi_instance_t vmi, vmi_event_t *event)
 
     // get back callback data struct
     struct bp_cb_data *cb_data = (struct bp_cb_data*)event->data;
-    printf("Single-step event: VCPU: %u\n", event->vcpu_id);
+    printf("Single-step event: VCPU: %u at %lX\n", event->vcpu_id, event->arm_regs->pc);
 
     // restore breakpoint
     if (VMI_FAILURE == vmi_write_va(vmi, cb_data->sym_vaddr, 0, sizeof(BREAKPOINT), &BREAKPOINT, NULL)) {
-        fprintf(stderr, "Failed to write breakpoint at 0x%" PRIx64 "\n",event->x86_regs->rip);
+        fprintf(stderr, "Failed to write breakpoint at 0x%" PRIx64 "\n", event->arm_regs->pc);
         interrupted = true;
         return VMI_EVENT_RESPONSE_NONE;
     }
@@ -219,34 +169,18 @@ int main (int argc, char **argv)
         goto error_exit;
     }
 
-    // TODO:
-    uint32_t buf[12];
-    if (VMI_SUCCESS == vmi_read_va(vmi, sym_vaddr, 0, sizeof(buf), buf, NULL)) {
-	for (size_t i = 0; i < 12; i++)
-		printf("%x\n", buf[i]);
-    }
-
     // save opcode
     printf("Save opcode\n");
-    if (VMI_FAILURE == vmi_read_va(vmi, sym_vaddr + 8, 0, sizeof(BREAKPOINT), &saved_instruction, NULL)) {
+    if (VMI_FAILURE == vmi_read_va(vmi, sym_vaddr, 0, sizeof(BREAKPOINT), &saved_instruction, NULL)) {
         fprintf(stderr, "Failed to read opcode\n");
         goto error_exit;
     }
 
     // write breakpoint
-    printf("Write breakpoint at 0x%" PRIx64 "\n", sym_vaddr + 8);
-    if (VMI_FAILURE == vmi_write_va(vmi, sym_vaddr + 8, 0, sizeof(BREAKPOINT), &BREAKPOINT, NULL)) {
+    printf("Write breakpoint at 0x%" PRIx64 "\n", sym_vaddr);
+    if (VMI_FAILURE == vmi_write_va(vmi, sym_vaddr, 0, sizeof(BREAKPOINT), &BREAKPOINT, NULL)) {
         fprintf(stderr, "Failed to write breakpoint\n");
         goto error_exit;
-    }
-
-    // flush original code from cache
-    vmi_pagecache_flush(vmi);
-
-    // TODO:
-    if (VMI_SUCCESS == vmi_read_va(vmi, sym_vaddr, 0, sizeof(buf), buf, NULL)) {
-	for (size_t i = 0; i < 12; i++)
-		printf("%x\n", buf[i]);
     }
 
     // register int3 event
@@ -260,7 +194,7 @@ int main (int argc, char **argv)
     // fill and pass struct bp_cb_data
     struct bp_cb_data cb_data = {
         .symbol = symbol,
-        .sym_vaddr = sym_vaddr + 8,
+        .sym_vaddr = sym_vaddr,
         .saved_instruction = saved_instruction,
         .hit_count = 0,
     };
@@ -317,8 +251,8 @@ error_exit:
 
     // restore instruction if needed
     if (saved_instruction) {
-        printf("Restore previous opcode at 0x%" PRIx64 "\n", sym_vaddr + 8);
-        vmi_write_va(vmi, sym_vaddr + 8, 0, sizeof(BREAKPOINT), &saved_instruction, NULL);
+        printf("Restore previous opcode at 0x%" PRIx64 "\n", sym_vaddr);
+        vmi_write_va(vmi, sym_vaddr, 0, sizeof(BREAKPOINT), &saved_instruction, NULL);
     }
 
     // cleanup queue

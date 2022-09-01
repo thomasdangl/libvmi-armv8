@@ -276,6 +276,10 @@ kvm_put_memory(vmi_instance_t vmi,
         memory_cache_remove(vmi, ((paddr >> vmi->page_shift) + i) << vmi->page_shift);
     }
 
+#if defined(ARM32) || defined(ARM64)
+    kvm->libkvmi.kvmi_flush_cache(kvm->kvmi_dom, paddr >> vmi->page_shift, 1 + (length >> vmi->page_shift));
+#endif
+
     return VMI_SUCCESS;
 }
 

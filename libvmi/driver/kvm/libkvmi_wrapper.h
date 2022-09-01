@@ -131,6 +131,8 @@ typedef struct {
     size_t (*kvmi_get_pending_events)
     (void *dom);
 
+    void (*kvmi_flush_cache)
+    (void *dom, unsigned long long int pfn, unsigned long long int cnt);
 } libkvmi_wrapper_t;
 
 status_t create_libkvmi_wrapper(struct kvm_instance *kvm);
