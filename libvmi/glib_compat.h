@@ -47,6 +47,8 @@ g_int64_hash(
     return (guint) * (const gint64 *) v;
 }
 
+#endif
+
 static inline gboolean
 g_hash_table_insert_compat(GHashTable *table,
                            gpointer key,

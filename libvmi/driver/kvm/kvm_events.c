@@ -28,10 +28,6 @@
 #include "kvm_events.h"
 #include "kvm_private.h"
 
-#if defined(ARM32) || defined(ARM64)
-#define PSR_BTYPE_MASK 0xc00
-#endif
-
 // helper struct for process_cb_response_emulate to avoid ugly
 // pointer arithmetic to find back pf field in process_cb_response_emulate()
 struct kvm_event_pf_reply_packet {
@@ -953,20 +949,20 @@ process_single_event(vmi_instance_t vmi, struct kvmi_dom_event **event)
     kvm_instance_t *kvm = kvm_get_instance(vmi);
 
     // handle event
-    ev_reason = (*event)->event.common.event;
+    ev_reason = (*event)->event.common.hdr.event;
 
     // special case to handle PAUSE events
     // since they have to managed by vmi_resume_vm(), we simply store them
     // in the kvm_instance for later use by this function
     if (KVMI_EVENT_PAUSE_VCPU == ev_reason) {
 #ifdef ENABLE_SAFETY_CHECKS
-        uint16_t vcpu = (*event)->event.common.vcpu;
+        uint16_t vcpu = (*event)->event.common.ev.vcpu;
         // silence unused variable warnings if not asserts
         (void) vcpu;
         assert(vcpu < vmi->num_vcpus);
 #endif
         dbprint(VMI_DEBUG_KVM, "--Moving PAUSE_VPCU event in the buffer\n");
-        kvm->pause_events_list[(*event)->event.common.vcpu] = (*event);
+        kvm->pause_events_list[(*event)->event.common.ev.vcpu] = (*event);
         (*event) = NULL;
         return VMI_SUCCESS;
     }
