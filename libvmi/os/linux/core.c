@@ -372,6 +372,37 @@ static status_t init_task_kaslr_test(vmi_instance_t vmi, addr_t page_vaddr)
     return ret;
 }
 
+static status_t get_kaslr_offset_aarch64(vmi_instance_t vmi)
+{
+    addr_t kernel_text_start = 0xffff800000000000;
+    addr_t kernel_text_end = kernel_text_start + 0x80000000;
+
+    linux_instance_t linux_instance = vmi->os_data;
+
+    GSList *loop, *pages = vmi_get_va_pages(vmi, vmi->kpgd);
+    loop = pages;
+    while (loop) {
+        page_info_t *info = loop->data;
+
+	if ( info->vaddr >= kernel_text_start &&
+                 kernel_text_end > info->vaddr &&
+                 VMI_SUCCESS == init_task_kaslr_test(vmi, info->vaddr) ) {
+            linux_instance->kaslr_offset = info->vaddr - (vmi->init_task & ~VMI_BIT_MASK(0,11));
+            vmi->init_task = linux_instance->init_task_fixed + linux_instance->kaslr_offset;
+            dbprint(VMI_DEBUG_MISC, "**calculated KASLR offset in 64-bit mode: 0x%"PRIx64"\n", linux_instance->kaslr_offset);
+            g_free(info);
+            g_slist_free(pages);
+	    return VMI_SUCCESS;
+        }
+
+        g_free(info);
+        loop = loop->next;
+    }
+
+    g_slist_free(pages);
+    return VMI_FAILURE;
+}
+
 static status_t get_kaslr_offset_ia32e(vmi_instance_t vmi)
 {
     addr_t va, pa;
@@ -416,9 +447,17 @@ static status_t init_kaslr(vmi_instance_t vmi)
         return VMI_SUCCESS;
     }
 
-    if ( vmi->page_mode == VMI_PM_IA32E ) {
-        if ( VMI_SUCCESS == get_kaslr_offset_ia32e(vmi) )
-            return VMI_SUCCESS;
+    switch ( vmi->page_mode ) {
+        case VMI_PM_AARCH64:
+            if ( VMI_SUCCESS == get_kaslr_offset_aarch64(vmi) )
+                return VMI_SUCCESS;
+            break;
+        case VMI_PM_IA32E:
+            if ( VMI_SUCCESS == get_kaslr_offset_ia32e(vmi) )
+                return VMI_SUCCESS;
+            break;
+        default:
+            break;
     }
 
     status_t ret = VMI_FAILURE;
