@@ -251,7 +251,6 @@ call_event_callback(
 static status_t
 process_register(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
-#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event) {
         errprint("%s: Invalid vmi or kvmi event handles\n", __func__);
@@ -285,13 +284,21 @@ process_register(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     }
 
     // fill libvmi_event struct
+    libvmi_event->vcpu_id = kvmi_event->event.common.ev.vcpu;
+#if defined(ARM32) || defined(ARM64)
+    arm_registers_t regs = {0};
+    libvmi_event->arm_regs = &regs;
+    struct kvm_regs *kvmi_regs = &kvmi_event->event.common.ev.arch.regs;
+    struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.ev.arch.sregs;
+    kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->arm_regs);
+#else
     x86_registers_t regs = {0};
     libvmi_event->x86_regs = &regs;
-
     struct kvm_regs *kvmi_regs = &kvmi_event->event.common.arch.regs;
     struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.arch.sregs;
     kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->x86_regs);
     libvmi_event->vcpu_id = kvmi_event->event.common.vcpu;
+#endif
 
     // fill specific CR fields
     // TODO: kvmi only handles write accesses for now
@@ -310,16 +317,14 @@ process_register(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
     } rpl = {0};
 
     // set reply action
-    rpl.hdr.vcpu = kvmi_event->event.common.vcpu;
-    rpl.common.event = kvmi_event->event.common.event;
+    rpl.hdr.vcpu = kvmi_event->event.common.ev.vcpu;
+    rpl.common.event = kvmi_event->event.common.hdr.event;
     rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
 
     // the reply value will override the existing one
     rpl.cr.new_val = libvmi_event->reg_event.value;
 
     return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
-#endif
-    return VMI_FAILURE;
 }
 
 static status_t
@@ -807,8 +812,8 @@ kvm_events_init(
     kvm->process_event[KVMI_EVENT_PAUSE_VCPU] = &process_pause_event;
     kvm->process_event[KVMI_EVENT_BREAKPOINT] = &process_interrupt;
     kvm->process_event[KVMI_EVENT_SINGLESTEP] = &process_singlestep;
-#if 0
     kvm->process_event[KVMI_EVENT_CR] = &process_register;
+#if 0
     kvm->process_event[KVMI_EVENT_MSR] = &process_msr;
     kvm->process_event[KVMI_EVENT_PF] = &process_pagefault;
     kvm->process_event[KVMI_EVENT_DESCRIPTOR] = &process_descriptor;
@@ -823,11 +828,11 @@ kvm_events_init(
     //  PF:         kvmi_set_page_access
     //  singlestep: kvmi_control_singlestep()
     for (unsigned int vcpu = 0; vcpu < vmi->num_vcpus; vcpu++) {
-#if 0
         if (kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_CR, true)) {
             errprint("--Failed to enable CR interception\n");
             goto err_exit;
         }
+#if 0
         if (kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_MSR, true)) {
             errprint("--Failed to enable MSR interception\n");
             goto err_exit;
