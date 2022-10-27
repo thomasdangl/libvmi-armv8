@@ -29,7 +29,6 @@
 #include "driver/driver_wrapper.h"
 #include "os/linux/linux.h"
 
-
 void linux_read_config_ghashtable_entries(char* key, gpointer value,
         vmi_instance_t vmi);
 
@@ -378,28 +377,15 @@ static status_t get_kaslr_offset_aarch64(vmi_instance_t vmi)
     addr_t kernel_text_end = kernel_text_start + 0x80000000;
 
     linux_instance_t linux_instance = vmi->os_data;
-
-    GSList *loop, *pages = vmi_get_va_pages(vmi, vmi->kpgd);
-    loop = pages;
-    while (loop) {
-        page_info_t *info = loop->data;
-
-	if ( info->vaddr >= kernel_text_start &&
-                 kernel_text_end > info->vaddr &&
-                 VMI_SUCCESS == init_task_kaslr_test(vmi, info->vaddr) ) {
-            linux_instance->kaslr_offset = info->vaddr - (vmi->init_task & ~VMI_BIT_MASK(0,11));
+    for (addr_t cur = kernel_text_start; cur < kernel_text_end; cur += 0x1000) {
+	if ( VMI_SUCCESS == init_task_kaslr_test(vmi, cur) ) {
+            linux_instance->kaslr_offset = cur - (vmi->init_task & ~VMI_BIT_MASK(0,11));
             vmi->init_task = linux_instance->init_task_fixed + linux_instance->kaslr_offset;
             dbprint(VMI_DEBUG_MISC, "**calculated KASLR offset in 64-bit mode: 0x%"PRIx64"\n", linux_instance->kaslr_offset);
-            g_free(info);
-            g_slist_free(pages);
 	    return VMI_SUCCESS;
         }
 
-        g_free(info);
-        loop = loop->next;
     }
-
-    g_slist_free(pages);
     return VMI_FAILURE;
 }
 
