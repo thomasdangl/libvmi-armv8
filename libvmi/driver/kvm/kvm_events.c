@@ -475,7 +475,6 @@ process_interrupt(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 static status_t
 process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 {
-#if 0
 #ifdef ENABLE_SAFETY_CHECKS
     if (!vmi || !kvmi_event)
         return VMI_FAILURE;
@@ -499,12 +498,26 @@ process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
         libvmi_event = g_hash_table_lookup(vmi->mem_events_on_gfn, GSIZE_TO_POINTER(gfn));
         if (libvmi_event && (libvmi_event->mem_event.in_access & out_access)) {
             // fill libvmi_event struct
-            x86_registers_t regs = {0};
-            libvmi_event->x86_regs = &regs;
-            struct kvm_regs *kvmi_regs = &kvmi_event->event.common.arch.regs;
-            struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.arch.sregs;
-            kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->x86_regs);
-            libvmi_event->vcpu_id = kvmi_event->event.common.vcpu;
+	    libvmi_event->vcpu_id = kvmi_event->event.common.ev.vcpu;
+#if defined(ARM32) || defined(ARM64)
+	    arm_registers_t regs = {0};
+	    libvmi_event->arm_regs = &regs;
+	    struct kvm_regs *kvmi_regs = &kvmi_event->event.common.ev.arch.regs;
+	    struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.ev.arch.sregs;
+	    kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->arm_regs);
+	    // TODO: make this stuff platform agnostic.
+            libvmi_event->mem_event.gfn = gfn;
+            libvmi_event->mem_event.out_access = out_access;
+            //libvmi_event->mem_event.gla = kvmi_event->event.page_fault.gva;
+            libvmi_event->mem_event.offset = kvmi_event->event.page_fault.gpa & VMI_BIT_MASK(0, 11);
+#else
+	    x86_registers_t regs = {0};
+	    libvmi_event->x86_regs = &regs;
+	    struct kvm_regs *kvmi_regs = &kvmi_event->event.common.arch.regs;
+	    struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.arch.sregs;
+	    kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->x86_regs);
+	    libvmi_event->vcpu_id = kvmi_event->event.common.vcpu;
+
             //      mem_event
             libvmi_event->mem_event.gfn = gfn;
             libvmi_event->mem_event.out_access = out_access;
@@ -513,8 +526,9 @@ process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
             // TODO
             // libvmi_event->mem_event.valid
             // libvmi_event->mem_event.gptw
+#endif
 
-            // call user callback
+	    // call user callback
             event_response_t response = call_event_callback(vmi, libvmi_event);
 
             // handle emulation reply requests
@@ -522,8 +536,8 @@ process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
                 return VMI_FAILURE;
 
             // set reply action
-            rpl.hdr.vcpu = kvmi_event->event.common.vcpu;
-            rpl.common.event = kvmi_event->event.common.event;
+	    rpl.hdr.vcpu = kvmi_event->event.common.ev.vcpu;
+	    rpl.common.event = kvmi_event->event.common.hdr.event;
             rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
 
             return process_cb_response(vmi, response, libvmi_event, kvmi_event, &rpl, sizeof(rpl));
@@ -538,11 +552,26 @@ process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
         ghashtable_foreach(vmi->mem_events_generic, i, &key, &libvmi_event) {
             if ( GPOINTER_TO_UINT(key) & out_access ) {
                 // fill libvmi_event struct
+	        libvmi_event->vcpu_id = kvmi_event->event.common.ev.vcpu;
+#if defined(ARM32) || defined(ARM64)
+	        arm_registers_t regs = {0};
+	        libvmi_event->arm_regs = &regs;
+	        struct kvm_regs *kvmi_regs = &kvmi_event->event.common.ev.arch.regs;
+	        struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.ev.arch.sregs;
+	        kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->arm_regs);
+	        // TODO: make this stuff platform agnostic.
+                libvmi_event->mem_event.gfn = gfn;
+                libvmi_event->mem_event.out_access = out_access;
+                //libvmi_event->mem_event.gla = kvmi_event->event.page_fault.gva;
+                libvmi_event->mem_event.offset = kvmi_event->event.page_fault.gpa & VMI_BIT_MASK(0, 11);
+#else
                 x86_registers_t regs = {0};
                 libvmi_event->x86_regs = &regs;
                 struct kvm_regs *kvmi_regs = &kvmi_event->event.common.arch.regs;
                 struct kvm_sregs *kvmi_sregs = &kvmi_event->event.common.arch.sregs;
                 kvmi_regs_to_libvmi(kvmi_regs, kvmi_sregs, libvmi_event->x86_regs);
+                libvmi_event->vcpu_id = kvmi_event->event.common.vcpu;
+
                 //      mem_event
                 libvmi_event->mem_event.gfn = gfn;
                 libvmi_event->mem_event.out_access = out_access;
@@ -551,6 +580,7 @@ process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
                 // TODO
                 // libvmi_event->mem_event.valid
                 // libvmi_event->mem_event.gptw
+#endif
 
                 // call user callback
                 event_response_t response = call_event_callback(vmi, libvmi_event);
@@ -560,8 +590,8 @@ process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
                     return VMI_FAILURE;
 
                 // set reply action
-                rpl.hdr.vcpu = kvmi_event->event.common.vcpu;
-                rpl.common.event = kvmi_event->event.common.event;
+                rpl.hdr.vcpu = kvmi_event->event.common.ev.vcpu;
+		rpl.common.event = kvmi_event->event.common.hdr.event;
                 rpl.common.action = KVMI_EVENT_ACTION_CONTINUE;
 
                 if (VMI_FAILURE ==
@@ -577,8 +607,6 @@ process_pagefault(vmi_instance_t vmi, struct kvmi_dom_event *kvmi_event)
 
     errprint("%s: Caught a memory event that had no handler registered in LibVMI @ GFN 0x%" PRIx64 " (0x%" PRIx64 "), access: %u\n",
              __func__, gfn, (addr_t)kvmi_event->event.page_fault.gpa, out_access);
-    return VMI_FAILURE;
-#endif
     return VMI_FAILURE;
 }
 
@@ -813,9 +841,9 @@ kvm_events_init(
     kvm->process_event[KVMI_EVENT_BREAKPOINT] = &process_interrupt;
     kvm->process_event[KVMI_EVENT_SINGLESTEP] = &process_singlestep;
     kvm->process_event[KVMI_EVENT_CR] = &process_register;
+    kvm->process_event[KVMI_EVENT_PF] = &process_pagefault;
 #if 0
     kvm->process_event[KVMI_EVENT_MSR] = &process_msr;
-    kvm->process_event[KVMI_EVENT_PF] = &process_pagefault;
     kvm->process_event[KVMI_EVENT_DESCRIPTOR] = &process_descriptor;
     kvm->process_event[KVMI_EVENT_CPUID] = &process_cpuid;
 #endif
@@ -837,11 +865,11 @@ kvm_events_init(
             errprint("--Failed to enable MSR interception\n");
             goto err_exit;
         }
+#endif
         if (kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_PF, true)) {
             errprint("--Failed to enable page fault interception\n");
             goto err_exit;
         }
-#endif
 
         if (kvm->libkvmi.kvmi_control_events(kvm->kvmi_dom, vcpu, KVMI_EVENT_SINGLESTEP, true)) {
             errprint("--Failed to enable singlestep monitoring\n");
