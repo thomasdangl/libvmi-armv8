@@ -373,19 +373,20 @@ static status_t init_task_kaslr_test(vmi_instance_t vmi, addr_t page_vaddr)
 
 static status_t get_kaslr_offset_aarch64(vmi_instance_t vmi)
 {
-    addr_t kernel_text_start = 0xffff800000000000;
-    addr_t kernel_text_end = kernel_text_start + 0x80000000;
-
+    addr_t vectors;
+    uint64_t vbar;
     linux_instance_t linux_instance = vmi->os_data;
-    for (addr_t cur = kernel_text_start; cur < kernel_text_end; cur += 0x1000) {
-	if ( VMI_SUCCESS == init_task_kaslr_test(vmi, cur) ) {
-            linux_instance->kaslr_offset = cur - (vmi->init_task & ~VMI_BIT_MASK(0,11));
-            vmi->init_task = linux_instance->init_task_fixed + linux_instance->kaslr_offset;
-            dbprint(VMI_DEBUG_MISC, "**calculated KASLR offset in 64-bit mode: 0x%"PRIx64"\n", linux_instance->kaslr_offset);
-	    return VMI_SUCCESS;
-        }
 
+    if ( VMI_SUCCESS == json_profile_lookup(vmi, "vectors", NULL, &vectors)
+         && VMI_SUCCESS == vmi_get_vcpureg(vmi, &vbar, VBAR, 0)
+         && VMI_SUCCESS == init_task_kaslr_test(vmi, (vbar - vectors + vmi->init_task) & ~VMI_BIT_MASK(0,11)) )
+    {
+        linux_instance->kaslr_offset = vbar - vectors;
+        vmi->init_task = linux_instance->init_task_fixed + linux_instance->kaslr_offset;
+        dbprint(VMI_DEBUG_MISC, "**calculated KASLR offset in 64-bit mode: 0x%"PRIx64"\n", linux_instance->kaslr_offset);
+	return VMI_SUCCESS;
     }
+
     return VMI_FAILURE;
 }
 

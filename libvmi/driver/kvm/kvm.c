@@ -191,6 +191,7 @@ kvmi_regs_to_libvmi(
     arm_regs.ttbr0 = kvmi_sregs->sys_regs[7];
     arm_regs.ttbr1 = kvmi_sregs->sys_regs[8];
     arm_regs.ttbcr = kvmi_sregs->sys_regs[9];
+    arm_regs.vbar = kvmi_sregs->sys_regs[15];
 
     // assign
     (*libvmi_regs) = arm_regs;
@@ -771,6 +772,9 @@ kvm_get_vcpureg(
 	    break;
 	case PC:
 	    *value = regs.arm.pc;
+	    break;
+	case VBAR:
+	    *value = regs.arm.vbar;
 	    break;
         default:
             dbprint(VMI_DEBUG_KVM, "--Reading register %"PRIu64" not implemented\n", reg);

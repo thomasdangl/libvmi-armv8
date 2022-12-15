@@ -458,6 +458,7 @@ typedef uint64_t reg_t;
 #define SP_EL0           110
 #define SP_EL1           111
 #define ELR_EL1          112
+#define VBAR             113
 
 /**
  * Many ARM64 registers are architecturally mapped over ARM32 registers
@@ -642,6 +643,7 @@ typedef struct arm_registers {
     uint64_t ttbr0;
     uint64_t ttbr1;
     uint64_t ttbcr;
+    uint64_t vbar;
 } arm_registers_t;
 
 typedef struct registers {
