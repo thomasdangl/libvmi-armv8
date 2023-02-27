@@ -101,9 +101,9 @@ vmi_mmap_guest(
         goto done;
 
     for (i = 0; i < num_pages; i++) {
-        if (VMI_SUCCESS == vmi_nested_pagetable_lookup(vmi, npt, npm, dtb, pm, addr + buf_offset, &paddr, &naddr)) {
-
-            if (valid_npm(npm))
+        if (VMI_SUCCESS == vmi_nested_pagetable_lookup(vmi, npt, npm, dtb, pm, addr + buf_offset, &paddr, &naddr)
+		&& paddr != 0) {
+	    if (valid_npm(npm))
                 paddr = naddr;
 
             pfns[pfn_ndx] = paddr >> vmi->page_shift;
@@ -122,20 +122,9 @@ vmi_mmap_guest(
         goto done;
     }
 
-    void *base_ptr = (char *)driver_mmap_guest(vmi, pfns, pfn_ndx);
-
-    if (MAP_FAILED == base_ptr || NULL == base_ptr) {
+    if (VMI_FAILURE == driver_mmap_guest(vmi, pfns, pfn_ndx, access_ptrs, num_pages)) {
         dbprint(VMI_DEBUG_READ, "--failed to mmap guest memory");
         goto done;
-    }
-
-    for (i = 0; i < num_pages; i++) {
-        if (access_ptrs[i] != (void *)-1) {
-            // add buffer base pointer to the relative offsets since now we know its value
-            access_ptrs[i] += (addr_t)base_ptr;
-        } else {
-            access_ptrs[i] = NULL;
-        }
     }
 
     ret = VMI_SUCCESS;
@@ -146,6 +135,15 @@ done:
     }
 
     return ret;
+}
+
+status_t
+vmi_munmap_guest(
+    vmi_instance_t vmi,
+    size_t num_pages,
+    void **access_ptrs)
+{
+    return driver_munmap_guest(vmi, access_ptrs, num_pages);
 }
 
 status_t

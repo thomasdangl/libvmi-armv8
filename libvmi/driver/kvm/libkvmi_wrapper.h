@@ -55,6 +55,9 @@ typedef struct {
     int (*kvmi_get_version)
     ( void *dom, unsigned int *version );
 
+    int (*kvmi_memory_mapping)
+    (void *dom, bool enable);
+
     int (*kvmi_control_events)
     (void *dom, unsigned short vcpu, int id, bool enable);
 
@@ -92,6 +95,12 @@ typedef struct {
 
     int (*kvmi_write_physical)
     (void *dom, unsigned long long int gpa, const void *buffer, size_t size);
+
+    void *(*kvmi_map_physical_page)
+    (void *dom, unsigned long long int gpa);
+
+    int (*kvmi_unmap_physical_page)
+    (void *dom, void *addr);
 
     int (*kvmi_get_registers)
     (void *dom, unsigned short vcpu, struct kvm_regs *regs, struct kvm_sregs *sregs,

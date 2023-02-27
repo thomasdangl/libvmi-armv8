@@ -100,6 +100,19 @@ void *kvm_read_page(
     vmi_instance_t vmi,
     addr_t page);
 
+status_t kvm_mmap_guest(
+    vmi_instance_t vmi,
+    unsigned long *pfns,
+    unsigned int size,
+    void **access_ptrs,
+    size_t num_pages);
+
+status_t kvm_munmap_guest(
+    vmi_instance_t vmi,
+    void **access_ptrs,
+    size_t num_pages);
+
+
 int kvm_is_pv(
     vmi_instance_t vmi);
 
@@ -166,6 +179,8 @@ driver_kvm_setup(vmi_instance_t vmi)
     driver.set_vcpuregs_ptr = &kvm_set_vcpuregs;
 # endif
     driver.read_page_ptr = &kvm_read_page;
+    driver.mmap_guest = &kvm_mmap_guest;
+    driver.munmap_guest = &kvm_munmap_guest;
     driver.is_pv_ptr = &kvm_is_pv;
     driver.pause_vm_ptr = &kvm_pause_vm;
     driver.resume_vm_ptr = &kvm_resume_vm;

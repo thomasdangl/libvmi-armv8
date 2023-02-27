@@ -112,10 +112,16 @@ typedef struct driver_interface {
     void *(*read_page_ptr) (
         vmi_instance_t,
         addr_t);
-    void *(*mmap_guest) (
+    status_t(*mmap_guest) (
         vmi_instance_t,
         unsigned long *,
-        unsigned int);
+        unsigned int,
+        void **,
+        size_t);
+    status_t(*munmap_guest) (
+        vmi_instance_t,
+        void **,
+        size_t);
     status_t (*write_ptr) (
         vmi_instance_t,
         addr_t,

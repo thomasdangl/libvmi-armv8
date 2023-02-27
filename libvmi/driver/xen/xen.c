@@ -2813,14 +2813,45 @@ xen_read_page(
     return memory_cache_insert(vmi, paddr);
 }
 
-void *
+status_t
 xen_mmap_guest(
     vmi_instance_t vmi,
     unsigned long *pfns,
-    unsigned int size)
+    unsigned int size,
+    void **access_ptrs,
+    size_t num_pages)
 {
     xen_instance_t *xen = xen_get_instance(vmi);
-    return xen->libxcw.xc_map_foreign_pages(xen->xchandle, xen->domainid, PROT_READ, pfns, size);
+    void *base_ptr = xen->libxcw.xc_map_foreign_pages(xen->xchandle, xen->domainid, PROT_READ, pfns, size);
+    status_t ret = (MAP_FAILED != base_ptr && NULL != base_ptr) ? VMI_SUCCESS : VMI_FAILURE;
+
+    for (size_t i = 0; i < num_pages; i++) {
+        if (VMI_SUCCESS == ret && access_ptrs[i] != (void *) -1) {
+            // add buffer base pointer to the relative offsets since now we know its value
+            access_ptrs[i] += (addr_t)base_ptr;
+        } else {
+            access_ptrs[i] = NULL;
+        }
+    }
+
+    return ret;
+}
+
+status_t
+xen_munmap_guest(
+    vmi_instance_t vmi,
+    void **access_ptrs,
+    size_t num_pages)
+{
+    status_t ret = VMI_SUCCESS;
+    size_t i;
+
+    for (i = 0; i < num_pages; i++)
+        if (access_ptrs[i] != NULL && munmap(access_ptrs[i], vmi->page_size) != 0) {
+            ret = VMI_FAILURE;
+        }
+
+    return ret;
 }
 
 status_t

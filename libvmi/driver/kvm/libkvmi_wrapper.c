@@ -32,12 +32,13 @@ static status_t sanity_check(kvm_instance_t *kvm)
 
     if ( !w->kvmi_init_unix_socket || !w->kvmi_init_vsock || !w->kvmi_uninit || !w->kvmi_close ||
             !w->kvmi_domain_close || !w->kvmi_connection_fd ||
-            !w->kvmi_get_version || !w->kvmi_control_events ||
+            !w->kvmi_get_version || !w->kvmi_memory_mapping || !w->kvmi_control_events ||
             !w->kvmi_control_vm_events || !w->kvmi_control_cr || !w->kvmi_control_singlestep ||
             !w->kvmi_control_msr || !w->kvmi_pause_all_vcpus ||
             !w->kvmi_set_page_access || !w->kvmi_get_tsc_speed ||
             !w->kvmi_get_vcpu_count || !w->kvmi_inject_exception ||
             !w->kvmi_read_physical || !w->kvmi_write_physical ||
+	    !w->kvmi_map_physical_page || !w->kvmi_unmap_physical_page ||
             !w->kvmi_get_registers || !w->kvmi_set_registers ||
             !w->kvmi_reply_event || !w->kvmi_pop_event || !w->kvmi_wait_event ||
             !w->kvmi_set_log_cb || !w->kvmi_get_maximum_gfn ||
@@ -76,6 +77,7 @@ status_t create_libkvmi_wrapper(struct kvm_instance *kvm)
     wrapper->kvmi_domain_close = dlsym(wrapper->handle, "kvmi_domain_close");
     wrapper->kvmi_connection_fd = dlsym(wrapper->handle, "kvmi_connection_fd");
     wrapper->kvmi_get_version = dlsym(wrapper->handle, "kvmi_get_version");
+    wrapper->kvmi_memory_mapping = dlsym(wrapper->handle, "kvmi_memory_mapping");
     wrapper->kvmi_control_events = dlsym(wrapper->handle, "kvmi_control_events");
     wrapper->kvmi_control_vm_events = dlsym(wrapper->handle, "kvmi_control_vm_events");
     wrapper->kvmi_control_cr = dlsym(wrapper->handle, "kvmi_control_cr");
@@ -87,6 +89,8 @@ status_t create_libkvmi_wrapper(struct kvm_instance *kvm)
     wrapper->kvmi_get_vcpu_count = dlsym(wrapper->handle, "kvmi_get_vcpu_count");
     wrapper->kvmi_inject_exception = dlsym(wrapper->handle, "kvmi_inject_exception");
     wrapper->kvmi_read_physical = dlsym(wrapper->handle, "kvmi_read_physical");
+    wrapper->kvmi_map_physical_page = dlsym(wrapper->handle, "kvmi_map_physical_page");
+    wrapper->kvmi_unmap_physical_page = dlsym(wrapper->handle, "kvmi_unmap_physical_page");
     wrapper->kvmi_write_physical = dlsym(wrapper->handle, "kvmi_write_physical");
     wrapper->kvmi_get_registers = dlsym(wrapper->handle, "kvmi_get_registers");
     wrapper->kvmi_set_registers = dlsym(wrapper->handle, "kvmi_set_registers");

@@ -284,6 +284,55 @@ kvm_put_memory(vmi_instance_t vmi,
     return VMI_SUCCESS;
 }
 
+status_t
+kvm_mmap_guest(
+    vmi_instance_t vmi,
+    unsigned long *pfns,
+    unsigned int size,
+    void **access_ptrs,
+    size_t num_pages)
+{
+    kvm_instance_t *kvm = kvm_get_instance(vmi);
+    status_t ret = VMI_SUCCESS;
+    size_t i, j = 0;
+
+    for (i = 0; i < num_pages; i++) {
+        if (j < size && access_ptrs[i] != (void *) -1) {
+            access_ptrs[i] =
+            kvm->libkvmi.kvmi_map_physical_page(kvm->kvmi_dom, pfns[j] << vmi->page_shift);
+            if (access_ptrs[i] == MAP_FAILED) {
+                ret = VMI_FAILURE;
+            }
+            ++j;
+        } else {
+            access_ptrs[i] = NULL;
+        }
+    }
+
+    return ret;
+}
+
+status_t
+kvm_munmap_guest(
+    vmi_instance_t vmi,
+    void **access_ptrs,
+    size_t num_pages)
+{
+    kvm_instance_t *kvm = kvm_get_instance(vmi);
+    status_t ret = VMI_SUCCESS;
+    size_t i;
+
+    for (i = 0; i < num_pages; i++) {
+        if (access_ptrs[i] != NULL) {
+            if (kvm->libkvmi.kvmi_unmap_physical_page(kvm->kvmi_dom, access_ptrs[i])) {
+                ret = VMI_FAILURE;
+            }
+        }
+    }
+
+    return ret;
+}
+
 /**
  * Setup KVM live (i.e. KVM patch or KVM native) mode.
  * If KVM patch has been setup before, resume it.
@@ -465,6 +514,10 @@ init_kvmi(
     // available in 2019 on Intel Ice Lake
     dbprint(VMI_DEBUG_KVM, "--    SPP: %s\n", features.spp ? "Yes" : "No");
 #endif
+
+    // if available, enable memory mapping
+    if (kvm->libkvmi.kvmi_memory_mapping(kvm->kvmi_dom, true) != 0)
+        dbprint(VMI_DEBUG_KVM, "--KVMi memory mapping not available\n");
 
     return true;
 }

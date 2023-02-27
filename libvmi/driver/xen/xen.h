@@ -147,10 +147,16 @@ status_t xen_set_vcpuregs(
 void *xen_read_page(
     vmi_instance_t vmi,
     addr_t page);
-void *xen_mmap_guest(
+status_t xen_mmap_guest(
     vmi_instance_t vmi,
     unsigned long *pfns,
-    unsigned int size);
+    unsigned int size,
+    void **access_ptrs,
+    size_t num_pages);
+status_t xen_munmap_guest(
+    vmi_instance_t vmi,
+    void **access_ptrs,
+    size_t num_pages);
 status_t xen_write(
     vmi_instance_t vmi,
     addr_t paddr,
@@ -216,6 +222,7 @@ driver_xen_setup(vmi_instance_t vmi)
     driver.set_vcpuregs_ptr = &xen_set_vcpuregs;
     driver.read_page_ptr = &xen_read_page;
     driver.mmap_guest = &xen_mmap_guest;
+    driver.munmap_guest = &xen_munmap_guest;
     driver.write_ptr = &xen_write;
     driver.is_pv_ptr = &xen_is_pv;
     driver.pause_vm_ptr = &xen_pause_vm;

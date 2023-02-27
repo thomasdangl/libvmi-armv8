@@ -1380,7 +1380,7 @@ status_t vmi_read_va(
  * Maps num_pages of the guest's virtual memory into host, starting at the provided vaddr.
  * Each page will have it's own pointer in access_ptrs output array. Be aware that
  * not all virtual pages may be allocated and in such case, the corresponding array item
- * will be set to NULL. Remember to call munmap() on each array item afterwards.
+ * will be set to NULL. Remember to call vmi_munmap_guest() on the array afterwards.
  *
  * @param[in] vmi LibVMI instance
  * @param[in] ctx Access context
@@ -1390,6 +1390,19 @@ status_t vmi_read_va(
 status_t vmi_mmap_guest(
     vmi_instance_t vmi,
     const access_context_t *ctx,
+    size_t num_pages,
+    void **access_ptrs
+) NOEXCEPT;
+
+/**
+ * Unmaps pages previously mapped by vmi_mmap_guest.
+ *
+ * @param[in] vmi LibVMI instance
+ * @param[in] num_pages Number of guest pages to be unmapped
+ * @param[out] access_ptrs Array of size [num_pages] containing pointers to the respective guest's pages
+ */
+status_t vmi_munmap_guest(
+    vmi_instance_t vmi,
     size_t num_pages,
     void **access_ptrs
 ) NOEXCEPT;
